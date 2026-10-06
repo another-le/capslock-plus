@@ -4,6 +4,7 @@
 
 
 *.ico binary
+*.wav binary
 
 # Custom for Visual Studio
 *.cs     diff=csharp

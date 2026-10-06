@@ -60,6 +60,7 @@ allowRunOnClipboardChange:=true
 #Include lib_settingsGui.ahk
 #Include lib_winTransparent.ahk
 #Include lib_mouseSpeed.ahk
+#Include lib_mouseGesture.ahk
 #Include lib_mathBoard.ahk
 #include lib_loadAnimation.ahk
 

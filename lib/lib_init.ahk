@@ -36,6 +36,7 @@ if(isLangChinese())
 
 gosub, settingsInit ;初始化设置
 settingsGui_init()
+mouseGesture_init()
 
 
 gosub, bindWinsInit

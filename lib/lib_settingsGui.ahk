@@ -18,8 +18,8 @@ settingsGui_init(){
 }
 
 settingsGui_show(){
-    global settingsGuiHwnd, SettingsNavGeneralHighlight, SettingsNavPinHighlight, SettingsNavQbarHighlight, SettingsNavHotkeysHighlight, SettingsNavPhrasesHighlight
-    global SettingsNavGeneral, SettingsNavPin, SettingsNavQbar, SettingsNavHotkeys, SettingsNavPhrases
+    global settingsGuiHwnd, SettingsNavGeneralHighlight, SettingsNavPinHighlight, SettingsNavQbarHighlight, SettingsNavHotkeysHighlight, SettingsNavPhrasesHighlight, SettingsNavGesturesHighlight
+    global SettingsNavGeneral, SettingsNavPin, SettingsNavQbar, SettingsNavHotkeys, SettingsNavPhrases, SettingsNavGestures
     global SettingsGeneralTitle, SettingsGeneralDescription, SettingsAutostart, SettingsLoadingAnimation, SettingsAllowClipboard
     global SettingsMouseSpeedLabel, SettingsMouseSpeed, SettingsSchemeLabel, SettingsHotkeyScheme
     global SettingsHotkeysTitle, SettingsHotkeysDescription, SettingsHotkeysHint
@@ -30,6 +30,10 @@ settingsGui_show(){
     global SettingsQbarExternalPath, SettingsQbarExternalPathLabel, SettingsQbarExternalPathHint, SettingsQbarChooseExternalPath
     global SettingsPhrasesTitle, SettingsPhrasesDescription, SettingsPhraseListView, SettingsPhraseTriggerLabel, SettingsPhraseReplacementLabel
     global SettingsPhraseTrigger, SettingsPhraseReplacement, SettingsPhraseAddButton, SettingsPhraseDeleteButton
+    global SettingsGesturesTitle, SettingsGesturesDescription, SettingsGestureEnabled, SettingsGestureDrawTrail
+    global SettingsGestureThresholdLabel, SettingsGestureThreshold, SettingsGestureThresholdHint
+    global SettingsGestureTimeoutLabel, SettingsGestureTimeout, SettingsGestureTimeoutHint
+    global SettingsGestureList
     global SettingsGuiStatus
 
     if(settingsGuiHwnd && DllCall("IsWindow", "Ptr", settingsGuiHwnd))
@@ -57,6 +61,16 @@ settingsGui_show(){
         phrasesReplacementLabel:="替换内容"
         phrasesAddLabel:="添加"
         phrasesDeleteLabel:="删除"
+        gesturesLabel:="鼠标手势"
+        gesturesTitle:="鼠标手势"
+        gesturesDescription:="按住鼠标右键绘制轨迹，松开后执行 Chrome 或全局动作。"
+        gestureEnabledLabel:="启用鼠标右键手势"
+        gestureTrailLabel:="绘制手势轨迹"
+        gestureThresholdLabel:="移动阈值（像素）"
+        gestureThresholdHint:="推荐 25；数值越小越灵敏。"
+        gestureTimeoutLabel:="手势超时（毫秒）"
+        gestureTimeoutHint:="轨迹开始后静止超过该时间将取消。"
+        gestureColumns:="手势|动作|范围"
         qbarLabel:="Qbar"
         qbarTitle:="Qbar"
         qbarDescription:="选择 CapsLock+Q 使用内置 Qbar，或绑定外部程序。"
@@ -104,6 +118,16 @@ settingsGui_show(){
         phrasesReplacementLabel:="Replacement"
         phrasesAddLabel:="Add"
         phrasesDeleteLabel:="Delete"
+        gesturesLabel:="Mouse gestures"
+        gesturesTitle:="Mouse gestures"
+        gesturesDescription:="Hold the right mouse button, draw a path, then release to run an action."
+        gestureEnabledLabel:="Enable right-button gestures"
+        gestureTrailLabel:="Draw gesture trail"
+        gestureThresholdLabel:="Movement threshold (px)"
+        gestureThresholdHint:="25 is recommended; lower values are more sensitive."
+        gestureTimeoutLabel:="Gesture timeout (ms)"
+        gestureTimeoutHint:="Cancel after the gesture stays still for this long."
+        gestureColumns:="Gesture|Action|Scope"
         qbarLabel:="Qbar"
         qbarTitle:="Qbar"
         qbarDescription:="Use the built-in Qbar or bind CapsLock+Q to an external app."
@@ -157,6 +181,8 @@ settingsGui_show(){
     Gui, SettingsGui:Add, Text, x28 y256 w138 h24 vSettingsNavHotkeys BackgroundTrans Center gSettingsGuiShowHotkeys, %hotkeysLabel%
     Gui, SettingsGui:Add, Progress, x12 y300 w166 h42 vSettingsNavPhrasesHighlight Background1677FF c1677FF Disabled, 100
     Gui, SettingsGui:Add, Text, x28 y310 w138 h24 vSettingsNavPhrases BackgroundTrans Center gSettingsGuiShowPhrases, %phrasesLabel%
+    Gui, SettingsGui:Add, Progress, x12 y348 w166 h42 vSettingsNavGesturesHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x28 y358 w138 h24 vSettingsNavGestures BackgroundTrans Center gSettingsGuiShowGestures, %gesturesLabel%
     Gui, SettingsGui:Font, s9 w400 cAAB1BA, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x22 y472 w150 h28 BackgroundTrans gSettingsGuiOpenAdvanced Center 0x200, %advancedLabel%
 
@@ -248,6 +274,29 @@ settingsGui_show(){
     Gui, SettingsGui:Add, Edit, x493 y342 w245 h48 r3 vSettingsPhraseReplacement
     Gui, SettingsGui:Add, Button, x228 y400 w96 h32 vSettingsPhraseAddButton gSettingsGuiPhraseAdd, %phrasesAddLabel%
     Gui, SettingsGui:Add, Button, x334 y400 w96 h32 vSettingsPhraseDeleteButton gSettingsGuiPhraseDelete, %phrasesDeleteLabel%
+
+    ; 鼠标手势设置页
+    Gui, SettingsGui:Font, s18 w600 c20242B, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x226 y28 w510 h36 vSettingsGesturesTitle BackgroundTrans, %gesturesTitle%
+    Gui, SettingsGui:Font, s9 w400 c68717D, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x228 y70 w500 h30 vSettingsGesturesDescription BackgroundTrans, %gesturesDescription%
+    Gui, SettingsGui:Font, s10 w400 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Checkbox, x228 y116 w205 h26 vSettingsGestureEnabled, %gestureEnabledLabel%
+    Gui, SettingsGui:Add, Checkbox, x228 y154 w205 h26 vSettingsGestureDrawTrail, %gestureTrailLabel%
+    Gui, SettingsGui:Font, s9 w600 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x228 y204 w195 h22 vSettingsGestureThresholdLabel BackgroundTrans, %gestureThresholdLabel%
+    Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Edit, x228 y230 w92 h30 Number vSettingsGestureThreshold
+    Gui, SettingsGui:Font, s8 w400 c68717D, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x228 y264 w205 h34 vSettingsGestureThresholdHint BackgroundTrans, %gestureThresholdHint%
+    Gui, SettingsGui:Font, s9 w600 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x228 y306 w195 h22 vSettingsGestureTimeoutLabel BackgroundTrans, %gestureTimeoutLabel%
+    Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Edit, x228 y332 w92 h30 Number vSettingsGestureTimeout
+    Gui, SettingsGui:Font, s8 w400 c68717D, Microsoft YaHei UI
+    Gui, SettingsGui:Add, Text, x228 y366 w205 h34 vSettingsGestureTimeoutHint BackgroundTrans, %gestureTimeoutHint%
+    Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
+    Gui, SettingsGui:Add, ListView, x448 y112 w290 h288 vSettingsGestureList Grid NoSortHdr, %gestureColumns%
     Gui, SettingsGui:Font, s9 w400 c287A46, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x228 y432 w500 h20 vSettingsGuiStatus BackgroundTrans
     Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
@@ -273,6 +322,10 @@ settingsGui_loadValues(){
     soundFile:=""
     qbarExternalApp:=1
     externalPath:=""
+    gestureEnabled:=1
+    gestureDrawTrail:=1
+    gestureThreshold:=25
+    gestureTimeout:=1000
     if(IsObject(CLSets) && IsObject(CLSets.Global))
     {
         autostart:=CLSets.Global.autostart ? 1 : 0
@@ -296,6 +349,14 @@ settingsGui_loadValues(){
             externalPath:=CLSets.Global.externalAppPath
         else if(CLSets.Global.listaryPath!="")
             externalPath:=CLSets.Global.listaryPath
+        if(CLSets.Global.mouseGestureEnabled="0")
+            gestureEnabled:=0
+        if(CLSets.Global.mouseGestureDrawTrail="0")
+            gestureDrawTrail:=0
+        if(CLSets.Global.mouseGestureThreshold>=10 && CLSets.Global.mouseGestureThreshold<=100)
+            gestureThreshold:=CLSets.Global.mouseGestureThreshold
+        if(CLSets.Global.mouseGestureTimeout>=300 && CLSets.Global.mouseGestureTimeout<=5000)
+            gestureTimeout:=CLSets.Global.mouseGestureTimeout
     }
     if(qbarExternalApp=1 && IsObject(CLSets) && IsObject(CLSets.Keys)
         && (InStr(CLSets.Keys.caps_q, "qbarExternalApp") || InStr(CLSets.Keys.caps_q, "qbarListary") || InStr(CLSets.Keys.caps_q, "listary")))
@@ -323,12 +384,51 @@ settingsGui_loadValues(){
     GuiControl, SettingsGui:, SettingsPinSoundFile, %soundFile%
     GuiControl, SettingsGui:Choose, SettingsQbarExternalApp, %qbarExternalApp%
     GuiControl, SettingsGui:, SettingsQbarExternalPath, %externalPath%
+    GuiControl, SettingsGui:, SettingsGestureEnabled, %gestureEnabled%
+    GuiControl, SettingsGui:, SettingsGestureDrawTrail, %gestureDrawTrail%
+    GuiControl, SettingsGui:, SettingsGestureThreshold, %gestureThreshold%
+    GuiControl, SettingsGui:, SettingsGestureTimeout, %gestureTimeout%
+    settingsGui_refreshGestureList()
     settingsGui_updateQbarExternalControls(qbarExternalApp=2)
     ; 打开或重新打开设置页时，先恢复已保存的 Qbar 路由，避免取消编辑留下临时预览状态。
     keysSet_applyQbarExternalApp()
     settingsGui_updateColorPreview(colorValue)
     settingsGui_loadPhrases()
     GuiControl, SettingsGui:, SettingsGuiStatus,
+}
+
+settingsGui_refreshGestureList(){
+    Gui, SettingsGui:ListView, SettingsGestureList
+    LV_Delete()
+    if(isLangChinese())
+    {
+        LV_Add("", "←", "后退", "Chrome")
+        LV_Add("", "→", "前进", "Chrome")
+        LV_Add("", "↓→", "新建标签页", "Chrome")
+        LV_Add("", "→↓", "到页面底部", "Chrome")
+        LV_Add("", "→↑", "到页面顶部", "Chrome")
+        LV_Add("", "↑↓", "刷新", "Chrome")
+        LV_Add("", "↑←", "左侧标签页", "Chrome")
+        LV_Add("", "↑→", "右侧标签页", "Chrome")
+        LV_Add("", "↓←", "关闭标签页", "Chrome")
+        LV_Add("", "↓←", "关闭窗口", "全局回退")
+    }
+    else
+    {
+        LV_Add("", "L", "Back", "Chrome")
+        LV_Add("", "R", "Forward", "Chrome")
+        LV_Add("", "DR", "New tab", "Chrome")
+        LV_Add("", "RD", "Page bottom", "Chrome")
+        LV_Add("", "RU", "Page top", "Chrome")
+        LV_Add("", "UD", "Refresh", "Chrome")
+        LV_Add("", "UL", "Previous tab", "Chrome")
+        LV_Add("", "UR", "Next tab", "Chrome")
+        LV_Add("", "DL", "Close tab", "Chrome")
+        LV_Add("", "DL", "Close window", "Global fallback")
+    }
+    LV_ModifyCol(1, 55)
+    LV_ModifyCol(2, 135)
+    LV_ModifyCol(3, 92)
 }
 
 settingsGui_loadPhrases(){
@@ -539,6 +639,14 @@ settingsGui_cleanupConfigDefaults(){
         IniDelete, CapsLock+settings.ini, Global, winPinSoundFile
     if(CLSets.Global.qbarExternalApp="builtin")
         IniDelete, CapsLock+settings.ini, Global, qbarExternalApp
+    if(CLSets.Global.mouseGestureEnabled="1")
+        IniDelete, CapsLock+settings.ini, Global, mouseGestureEnabled
+    if(CLSets.Global.mouseGestureDrawTrail="1")
+        IniDelete, CapsLock+settings.ini, Global, mouseGestureDrawTrail
+    if(CLSets.Global.mouseGestureThreshold="25")
+        IniDelete, CapsLock+settings.ini, Global, mouseGestureThreshold
+    if(CLSets.Global.mouseGestureTimeout="1000")
+        IniDelete, CapsLock+settings.ini, Global, mouseGestureTimeout
 
     if(CLSets.Global.winPinBorderColor!=""
         && winPinBorder_tryParseColor(CLSets.Global.winPinBorderColor, normalizedColor)
@@ -582,6 +690,7 @@ settingsGui_setPage(page){
     pinControls:="SettingsPinTitle|SettingsPinDescription|SettingsPinColorLabel|SettingsPinColorPreview|SettingsPinColorEdit|SettingsPinChooseColor|SettingsPinColorHint|SettingsPinSoundEnabled|SettingsPinSoundFileLabel|SettingsPinSoundFile|SettingsPinChooseSound|SettingsPinSoundDefaultHint"
     qbarControls:="SettingsQbarTitle|SettingsQbarDescription|SettingsQbarExternalAppLabel|SettingsQbarExternalApp|SettingsQbarExternalAppHint|SettingsQbarExternalPathLabel|SettingsQbarExternalPath|SettingsQbarChooseExternalPath|SettingsQbarExternalPathHint"
     phrasesControls:="SettingsPhrasesTitle|SettingsPhrasesDescription|SettingsPhraseListView|SettingsPhraseTriggerLabel|SettingsPhraseReplacementLabel|SettingsPhraseTrigger|SettingsPhraseReplacement|SettingsPhraseAddButton|SettingsPhraseDeleteButton"
+    gestureControls:="SettingsGesturesTitle|SettingsGesturesDescription|SettingsGestureEnabled|SettingsGestureDrawTrail|SettingsGestureThresholdLabel|SettingsGestureThreshold|SettingsGestureThresholdHint|SettingsGestureTimeoutLabel|SettingsGestureTimeout|SettingsGestureTimeoutHint|SettingsGestureList"
     if(page="pin")
     {
         settingsGuiPage:="pin"
@@ -593,18 +702,22 @@ settingsGui_setPage(page){
             GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(phrasesControls, "|")
             GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(pinControls, "|")
             GuiControl, SettingsGui:Show, %controlName%
         GuiControl, SettingsGui:Hide, SettingsNavGeneralHighlight
         GuiControl, SettingsGui:Hide, SettingsNavQbarHighlight
         GuiControl, SettingsGui:Hide, SettingsNavHotkeysHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPhrasesHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavGesturesHighlight
         GuiControl, SettingsGui:Show, SettingsNavPinHighlight
         GuiControl, SettingsGui:+c89919D, SettingsNavGeneral
         GuiControl, SettingsGui:+cFFFFFF, SettingsNavPin
         GuiControl, SettingsGui:+c89919D, SettingsNavQbar
         GuiControl, SettingsGui:+c89919D, SettingsNavHotkeys
         GuiControl, SettingsGui:+c89919D, SettingsNavPhrases
+        GuiControl, SettingsGui:+c89919D, SettingsNavGestures
     }
     else if(page="qbar")
     {
@@ -617,6 +730,8 @@ settingsGui_setPage(page){
             GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(phrasesControls, "|")
             GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(qbarControls, "|")
             GuiControl, SettingsGui:Show, %controlName%
         GuiControlGet, qbarSelection, SettingsGui:, SettingsQbarExternalApp
@@ -625,12 +740,14 @@ settingsGui_setPage(page){
         GuiControl, SettingsGui:Hide, SettingsNavPinHighlight
         GuiControl, SettingsGui:Hide, SettingsNavHotkeysHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPhrasesHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavGesturesHighlight
         GuiControl, SettingsGui:Show, SettingsNavQbarHighlight
         GuiControl, SettingsGui:+c89919D, SettingsNavGeneral
         GuiControl, SettingsGui:+c89919D, SettingsNavPin
         GuiControl, SettingsGui:+cFFFFFF, SettingsNavQbar
         GuiControl, SettingsGui:+c89919D, SettingsNavHotkeys
         GuiControl, SettingsGui:+c89919D, SettingsNavPhrases
+        GuiControl, SettingsGui:+c89919D, SettingsNavGestures
     }
     else if(page="hotkeys")
     {
@@ -643,18 +760,22 @@ settingsGui_setPage(page){
             GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(phrasesControls, "|")
             GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(hotkeysControls, "|")
             GuiControl, SettingsGui:Show, %controlName%
         GuiControl, SettingsGui:Hide, SettingsNavGeneralHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPinHighlight
         GuiControl, SettingsGui:Hide, SettingsNavQbarHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPhrasesHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavGesturesHighlight
         GuiControl, SettingsGui:Show, SettingsNavHotkeysHighlight
         GuiControl, SettingsGui:+c89919D, SettingsNavGeneral
         GuiControl, SettingsGui:+c89919D, SettingsNavPin
         GuiControl, SettingsGui:+c89919D, SettingsNavQbar
         GuiControl, SettingsGui:+cFFFFFF, SettingsNavHotkeys
         GuiControl, SettingsGui:+c89919D, SettingsNavPhrases
+        GuiControl, SettingsGui:+c89919D, SettingsNavGestures
     }
     else if(page="phrases")
     {
@@ -667,18 +788,50 @@ settingsGui_setPage(page){
             GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(hotkeysControls, "|")
             GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(phrasesControls, "|")
             GuiControl, SettingsGui:Show, %controlName%
         GuiControl, SettingsGui:Hide, SettingsNavGeneralHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPinHighlight
         GuiControl, SettingsGui:Hide, SettingsNavQbarHighlight
         GuiControl, SettingsGui:Hide, SettingsNavHotkeysHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavGesturesHighlight
         GuiControl, SettingsGui:Show, SettingsNavPhrasesHighlight
         GuiControl, SettingsGui:+c89919D, SettingsNavGeneral
         GuiControl, SettingsGui:+c89919D, SettingsNavPin
         GuiControl, SettingsGui:+c89919D, SettingsNavQbar
         GuiControl, SettingsGui:+c89919D, SettingsNavHotkeys
         GuiControl, SettingsGui:+cFFFFFF, SettingsNavPhrases
+        GuiControl, SettingsGui:+c89919D, SettingsNavGestures
+    }
+    else if(page="gestures")
+    {
+        settingsGuiPage:="gestures"
+        for index,controlName in StrSplit(generalControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(pinControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(qbarControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(hotkeysControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(phrasesControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Show, %controlName%
+        GuiControl, SettingsGui:Hide, SettingsNavGeneralHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavPinHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavQbarHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavHotkeysHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavPhrasesHighlight
+        GuiControl, SettingsGui:Show, SettingsNavGesturesHighlight
+        GuiControl, SettingsGui:+c89919D, SettingsNavGeneral
+        GuiControl, SettingsGui:+c89919D, SettingsNavPin
+        GuiControl, SettingsGui:+c89919D, SettingsNavQbar
+        GuiControl, SettingsGui:+c89919D, SettingsNavHotkeys
+        GuiControl, SettingsGui:+c89919D, SettingsNavPhrases
+        GuiControl, SettingsGui:+cFFFFFF, SettingsNavGestures
     }
     else
     {
@@ -691,18 +844,22 @@ settingsGui_setPage(page){
             GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(phrasesControls, "|")
             GuiControl, SettingsGui:Hide, %controlName%
+        for index,controlName in StrSplit(gestureControls, "|")
+            GuiControl, SettingsGui:Hide, %controlName%
         for index,controlName in StrSplit(generalControls, "|")
             GuiControl, SettingsGui:Show, %controlName%
         GuiControl, SettingsGui:Hide, SettingsNavPinHighlight
         GuiControl, SettingsGui:Hide, SettingsNavQbarHighlight
         GuiControl, SettingsGui:Hide, SettingsNavHotkeysHighlight
         GuiControl, SettingsGui:Hide, SettingsNavPhrasesHighlight
+        GuiControl, SettingsGui:Hide, SettingsNavGesturesHighlight
         GuiControl, SettingsGui:Show, SettingsNavGeneralHighlight
         GuiControl, SettingsGui:+cFFFFFF, SettingsNavGeneral
         GuiControl, SettingsGui:+c89919D, SettingsNavPin
         GuiControl, SettingsGui:+c89919D, SettingsNavQbar
         GuiControl, SettingsGui:+c89919D, SettingsNavHotkeys
         GuiControl, SettingsGui:+c89919D, SettingsNavPhrases
+        GuiControl, SettingsGui:+c89919D, SettingsNavGestures
     }
     GuiControl, SettingsGui:, SettingsGuiStatus,
 }
@@ -729,6 +886,7 @@ settingsGui_save(){
     global CLSets, settingsGuiPage, SettingsAutostart, SettingsLoadingAnimation, SettingsAllowClipboard, SettingsMouseSpeed, SettingsHotkeyScheme
     global SettingsPinColorEdit, SettingsPinSoundEnabled, SettingsPinSoundFile
     global SettingsQbarExternalApp, SettingsQbarExternalPath
+    global SettingsGestureEnabled, SettingsGestureDrawTrail, SettingsGestureThreshold, SettingsGestureTimeout
     global keyset
 
     Gui, SettingsGui:Submit, NoHide
@@ -769,6 +927,25 @@ settingsGui_save(){
         return false
     }
 
+    gestureEnabled:=SettingsGestureEnabled ? 1 : 0
+    gestureDrawTrail:=SettingsGestureDrawTrail ? 1 : 0
+    gestureThreshold:=SettingsGestureThreshold+0
+    gestureTimeout:=SettingsGestureTimeout+0
+    if(gestureThreshold<10 || gestureThreshold>100)
+    {
+        message:=isLangChinese() ? "鼠标手势移动阈值必须在 10 到 100 像素之间。" : "Gesture threshold must be between 10 and 100 pixels."
+        MsgBox, 0x40030, CapsLock+, %message%
+        GuiControl, SettingsGui:Focus, SettingsGestureThreshold
+        return false
+    }
+    if(gestureTimeout<300 || gestureTimeout>5000)
+    {
+        message:=isLangChinese() ? "鼠标手势超时必须在 300 到 5000 毫秒之间。" : "Gesture timeout must be between 300 and 5000 ms."
+        MsgBox, 0x40030, CapsLock+, %message%
+        GuiControl, SettingsGui:Focus, SettingsGestureTimeout
+        return false
+    }
+
     ; 内置 Qbar 不再暴露样式选项，切回内置模式时恢复项目原始样式。
     if(settingsGuiPage="qbar" && qbarExternalApp="builtin")
         settingsGui_restoreQbarDefaults()
@@ -792,6 +969,10 @@ settingsGui_save(){
     settingsGui_writeGlobalValue("winPinSoundFile", soundFile, "")
     settingsGui_writeGlobalValue("qbarExternalApp", qbarExternalApp, "builtin")
     settingsGui_writeGlobalValue("externalAppPath", externalPath, "")
+    settingsGui_writeGlobalValue("mouseGestureEnabled", gestureEnabled, 1)
+    settingsGui_writeGlobalValue("mouseGestureDrawTrail", gestureDrawTrail, 1)
+    settingsGui_writeGlobalValue("mouseGestureThreshold", gestureThreshold, 25)
+    settingsGui_writeGlobalValue("mouseGestureTimeout", gestureTimeout, 1000)
     IniDelete, CapsLock+settings.ini, Global, listaryPath
     ; 显式保存 CapsLock+Q 的路由，避免删除默认键后旧运行实例仍保留外部程序路由。
     IniWrite, %qbarKeyValue%, CapsLock+settings.ini, Keys, caps_q
@@ -808,6 +989,10 @@ settingsGui_save(){
     CLSets.Global.winPinSoundFile:=soundFile
     CLSets.Global.qbarExternalApp:=qbarExternalApp
     CLSets.Global.externalAppPath:=externalPath
+    CLSets.Global.mouseGestureEnabled:=gestureEnabled
+    CLSets.Global.mouseGestureDrawTrail:=gestureDrawTrail
+    CLSets.Global.mouseGestureThreshold:=gestureThreshold
+    CLSets.Global.mouseGestureTimeout:=gestureTimeout
     ; 两套布局会为缺失按键补不同的默认值。切换布局时必须先从 INI
     ; 重新建立 Keys 对象，否则旧布局已经补齐的值会阻止新布局生效。
     if(oldHotkeyScheme!=hotkeyScheme)
@@ -823,6 +1008,7 @@ settingsGui_save(){
     keysSet_applyQbarExternalApp()
     winPinBorder_refreshSettings()
     settingsGui_updateColorPreview(colorValue)
+    mouseGesture_applySettings()
     if(IsLabel("globalSettings"))
     {
         settingsTimerLabel:="globalSettings"
@@ -940,6 +1126,10 @@ SettingsGuiShowPhrases:
 settingsGui_setPage("phrases")
 return
 
+SettingsGuiShowGestures:
+settingsGui_setPage("gestures")
+return
+
 SettingsGuiPhraseListChanged:
 settingsGui_phraseLoadSelected()
 return
@@ -1007,6 +1197,13 @@ else if(settingsGuiPage="phrases")
     settingsGui_refreshPhraseList()
     GuiControl, SettingsGui:, SettingsPhraseTrigger,
     GuiControl, SettingsGui:, SettingsPhraseReplacement,
+}
+else if(settingsGuiPage="gestures")
+{
+    GuiControl, SettingsGui:, SettingsGestureEnabled, 1
+    GuiControl, SettingsGui:, SettingsGestureDrawTrail, 1
+    GuiControl, SettingsGui:, SettingsGestureThreshold, 25
+    GuiControl, SettingsGui:, SettingsGestureTimeout, 1000
 }
 else
 {

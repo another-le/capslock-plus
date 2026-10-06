@@ -97,6 +97,7 @@ if(latestModifyTime!=settingsModifyTime)
     if(isChangeGlobal) ;如果global改过
     {
         winPinBorder_refreshSettings()
+        mouseGesture_applySettings()
         
         for key1 in setsChanges.Global
         {
