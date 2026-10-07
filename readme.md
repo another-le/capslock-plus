@@ -46,3 +46,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/test_mouseGestureEngin
 ## 发布 EXE
 
 将 `v` 开头的版本标签（例如 `v0.2`）推送到 GitHub，会触发 [发布工作流](.github/workflows/release.yml)。它使用固定版本的 AutoHotkey v1 和 Ahk2Exe 编译 64 位 `CapsLock+.exe`，通过回归测试后创建对应的 GitHub Release，并上传 EXE 与 SHA-256 校验文件。只修改或推送普通分支不会创建 Release。
+
+如果某个标签的自动构建失败，可在 GitHub Actions 中从 `master` 手动运行同一工作流，输入已有标签名（例如 `v0.2`）；它会重新编译该标签对应的源码，无需移动或重建标签。

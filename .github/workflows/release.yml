@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and release (for example v0.2)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,11 +17,14 @@ permissions:
 jobs:
   release:
     runs-on: windows-2025
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           persist-credentials: false
 
       - name: Download verified AutoHotkey v1 toolchain
@@ -25,7 +34,7 @@ jobs:
           $ahkDir = Join-Path $env:RUNNER_TEMP 'autohotkey-v1'
           $ahkZip = Join-Path $env:RUNNER_TEMP 'AutoHotkey_1.1.37.02.zip'
 
-          Invoke-WebRequest 'https://www.autohotkey.com/download/1.1/AutoHotkey_1.1.37.02.zip' -OutFile $ahkZip
+          Invoke-WebRequest 'https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.37.02/AutoHotkey_1.1.37.02.zip' -OutFile $ahkZip
           $ahkHash = (Get-FileHash -LiteralPath $ahkZip -Algorithm SHA256).Hash
           if ($ahkHash -ne '6F3663F7CDD25063C8C8728F5D9B07813CED8780522FD1F124BA539E2854215F') {
             throw 'AutoHotkey v1 archive SHA256 mismatch.'
@@ -70,7 +79,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $tag = $env:RELEASE_TAG
+          if ($tag -notmatch '^v[0-9]+(?:\.[0-9]+)*$') { throw "Invalid version tag: $tag" }
           $exe = Join-Path $env:GITHUB_WORKSPACE 'dist\CapsLock+.exe'
           $checksum = Join-Path $env:GITHUB_WORKSPACE 'dist\CapsLock+.exe.sha256'
-          gh release create $env:GITHUB_REF_NAME $exe $checksum --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
-          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release creation failed.' }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe $checksum --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag $exe $checksum --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release upload failed.' }
