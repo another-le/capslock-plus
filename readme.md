@@ -42,3 +42,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/test_mouseGestureEngin
 ```
 
 测试使用独立的模拟输入，不会向桌面发送鼠标事件。手势识别核心移植自 [Lexikos/Gestures.ahk](https://github.com/Lexikos/Gestures.ahk)，规则配置设计参考 [ayuanx/AutoHotKey_MouseGesture](https://github.com/ayuanx/AutoHotKey_MouseGesture)。本项目沿用仓库中的 [GPL-2.0 许可证](LICENSE)。
+
+## 发布 EXE
+
+将 `v` 开头的版本标签（例如 `v0.2`）推送到 GitHub，会触发 [发布工作流](.github/workflows/release.yml)。它使用固定版本的 AutoHotkey v1 和 Ahk2Exe 编译 64 位 `CapsLock+.exe`，通过回归测试后创建对应的 GitHub Release，并上传 EXE 与 SHA-256 校验文件。只修改或推送普通分支不会创建 Release。

@@ -1,0 +1,76 @@
+name: Build and release Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download verified AutoHotkey v1 toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ahkDir = Join-Path $env:RUNNER_TEMP 'autohotkey-v1'
+          $ahkZip = Join-Path $env:RUNNER_TEMP 'AutoHotkey_1.1.37.02.zip'
+
+          Invoke-WebRequest 'https://www.autohotkey.com/download/1.1/AutoHotkey_1.1.37.02.zip' -OutFile $ahkZip
+          $ahkHash = (Get-FileHash -LiteralPath $ahkZip -Algorithm SHA256).Hash
+          if ($ahkHash -ne '6F3663F7CDD25063C8C8728F5D9B07813CED8780522FD1F124BA539E2854215F') {
+            throw 'AutoHotkey v1 archive SHA256 mismatch.'
+          }
+          Expand-Archive -LiteralPath $ahkZip -DestinationPath $ahkDir
+
+          foreach ($required in @('AutoHotkeyU64.exe', 'Compiler\Ahk2Exe.exe', 'Compiler\Unicode 64-bit.bin')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $ahkDir $required))) {
+              throw "Missing build tool: $required"
+            }
+          }
+          "AHK_DIR=$ahkDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Run gesture regression tests
+        shell: pwsh
+        run: |
+          $ahk = Join-Path $env:AHK_DIR 'AutoHotkeyU64.exe'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_mouseGestureEngine.ps1 -AhkPath $ahk
+          if ($LASTEXITCODE -ne 0) { throw 'Gesture regression tests failed.' }
+
+      - name: Compile 64-bit EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:AHK_DIR 'Compiler\Ahk2Exe.exe'
+          $base = Join-Path $env:AHK_DIR 'Compiler\Unicode 64-bit.bin'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'CapsLock+.ahk'
+          $icon = Join-Path $env:GITHUB_WORKSPACE 'capslock+icon.ico'
+          $dist = Join-Path $env:GITHUB_WORKSPACE 'dist'
+          New-Item -ItemType Directory -Path $dist -Force | Out-Null
+          $exe = Join-Path $dist 'CapsLock+.exe'
+          $arguments = '/in "{0}" /out "{1}" /icon "{2}" /base "{3}" /silent verbose' -f $source, $exe, $icon, $base
+          $process = Start-Process -FilePath $compiler -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $exe)) {
+            throw "Ahk2Exe failed (exit code $($process.ExitCode))."
+          }
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  CapsLock+.exe" | Set-Content -LiteralPath (Join-Path $dist 'CapsLock+.exe.sha256') -Encoding ascii
+
+      - name: Create GitHub Release and upload EXE
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = Join-Path $env:GITHUB_WORKSPACE 'dist\CapsLock+.exe'
+          $checksum = Join-Path $env:GITHUB_WORKSPACE 'dist\CapsLock+.exe.sha256'
+          gh release create $env:GITHUB_REF_NAME $exe $checksum --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release creation failed.' }
