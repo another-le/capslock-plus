@@ -117,6 +117,15 @@ mouseGesture_saveRules(rules){
         valid:=mouseGesture_makeRule(rule.scope, rule.path, rule.kind, rule.value, rule.name)
         validated.Push(valid)
     }
+    ; IniDelete creates a missing INI in the system ANSI code page. On an
+    ; English Windows runner that loses Chinese rule names on the next read.
+    if(!FileExist(mouseGestureSettingsFile))
+    {
+        iniFile:=FileOpen(mouseGestureSettingsFile, "w", "UTF-16")
+        if(!IsObject(iniFile))
+            return false
+        iniFile.Close()
+    }
     IniDelete, %mouseGestureSettingsFile%, MouseGestureRules
     for index, rule in validated
     {

@@ -334,6 +334,12 @@ customRules.Push(mouseGesture_makeRule("*", "L", "send", "!{Left}", "后退"))
 customRules.Push(mouseGesture_makeRule("*", "R", "send", "!{Right}", "前进"))
 customRules.Push(mouseGesture_makeRule("explorer.exe", "U", "send", "!{Up}", "上一级文件夹"))
 LexTest_Assert(mouseGesture_saveRules(customRules), "save custom rules to isolated INI")
+iniFile:=FileOpen(mouseGestureSettingsFile, "r")
+LexTest_Assert(IsObject(iniFile), "saved rules INI exists")
+iniFile.Pos:=0
+iniEncodingMark:=iniFile.ReadUShort()
+iniFile.Close()
+LexTest_Assert(iniEncodingMark=0xFEFF, "new rules INI uses UTF-16 on any Windows locale")
 LexTest_Assert(mouseGesture_matchRule("U", "explorer.exe").value="!{Up}", "new rule is active immediately without restart")
 mouseGestureRules:=[]
 mouseGesture_loadRules()
