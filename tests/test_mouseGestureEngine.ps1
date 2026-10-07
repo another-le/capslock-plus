@@ -83,6 +83,16 @@ $worker = @'
 #SingleInstance Off
 SetBatchLines, -1
 mouseGesture_init()
+LexTest_Assert(!mouseGestureHintHwnd && !mouseGestureHintShown, "startup must not create or show the gesture hint")
+mouseGestureTarget:={process:"chrome.exe"}, m_Gesture:=""
+mouseGesture_hintUpdate()
+LexTest_Assert(!mouseGestureHintHwnd, "stationary Chrome right-click must not create the hint")
+mouseGestureTarget:={process:"notepad.exe"}, m_Gesture:="_U"
+mouseGesture_hintUpdate()
+LexTest_Assert(mouseGestureHintHwnd && mouseGestureHintShown, "non-Chrome motion shows the hint")
+mouseGesture_hintStop()
+LexTest_Assert(!mouseGestureHintShown, "non-Chrome hint hides after release")
+mouseGestureTarget:=""
 mouseGestureDrawTrail:=false
 m_KeylessPrefix:="CLMouseGesture"
 m_InitialTimeout:=0
@@ -179,9 +189,16 @@ mouseGestureMoved:=false
 G_ExitGesture(false)
 LexTest_Assert(lexReplay.Length()=0, "recognized gesture must not replay right click")
 mouseGestureTarget:={process:"notepad.exe"}
+m_Gesture:="_D_L"
 mouseGesture_hintUpdate()
-LexTest_Assert(!mouseGestureHintShown, "non-Chrome hint remains hidden")
+GuiControlGet, hintText, MouseGestureHint:, MouseGestureHintText
+LexTest_Assert(hintText="↓←  关闭窗口", "non-Chrome close-window hint: " . hintText)
+LexTest_Assert(mouseGestureHintShown, "non-Chrome close-window hint shown")
+mouseGesture_hintStop()
 mouseGestureTarget:={process:"chrome.exe"}
+m_Gesture:=""
+mouseGesture_hintUpdate()
+LexTest_Assert(!mouseGestureHintShown, "stationary Chrome right-click must not show the hint")
 m_StartX:=120, m_StartY:=120, m_Gesture:="_U_D"
 mouseGesture_hintUpdate()
 GuiControlGet, hintText, MouseGestureHint:, MouseGestureHintText

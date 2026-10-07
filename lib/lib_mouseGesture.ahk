@@ -6,6 +6,8 @@ mouseGesture_init(){
     global
     mouseGestureState:={trailVisible:false}
     mouseGestureTarget:=""
+    mouseGestureHintHwnd:=0
+    mouseGestureHintShown:=false
     m_GestureKey:="RButton"
     m_GestureKey2:=""
     m_Interval:=20
@@ -34,7 +36,6 @@ mouseGesture_init(){
     mouseGesture_applySettings()
     if(!mouseGesture_rendererInit())
         mouseGestureDrawTrail:=false
-    mouseGesture_hintInit()
     OnExit("mouseGesture_onExit")
 }
 
@@ -150,7 +151,8 @@ mouseGesture_onExit(exitReason, exitCode){
     global m_PassKeyUp, mouseGestureGdipToken
     mouseGesture_trailStop()
     mouseGesture_hintStop()
-    Gui, MouseGestureHint:Destroy
+    if(mouseGestureHintHwnd && DllCall("IsWindow", "Ptr", mouseGestureHintHwnd))
+        Gui, MouseGestureHint:Destroy
     if(mouseGestureGdipToken)
         DllCall("gdiplus\GdiplusShutdown", "Ptr", mouseGestureGdipToken)
     ; A timeout can have forwarded button-down; never leave it held on exit.
@@ -165,7 +167,6 @@ mouseGesture_hintInit(){
     Gui, MouseGestureHint:Color, 241633
     Gui, MouseGestureHint:Font, s23 cFFFFFF, Segoe UI
     Gui, MouseGestureHint:Add, Text, vMouseGestureHintText Center x12 y10 w336 h60, 手势
-    Gui, MouseGestureHint:Show, Hide w360 h80 NA
     WinSet, Transparent, 238, ahk_id %mouseGestureHintHwnd%
     WinSet, Region, 0-0 w360 h80 R18-18, ahk_id %mouseGestureHintHwnd%
 }
@@ -173,11 +174,16 @@ mouseGesture_hintInit(){
 mouseGesture_hintUpdate(){
     global mouseGestureTarget, mouseGestureHintHwnd, mouseGestureHintShown
     global m_Gesture, m_StartX, m_StartY
-    ; Only Chrome shows the gesture preview; other applications stay unobstructed.
-    if(!IsObject(mouseGestureTarget) || mouseGestureTarget.process!="chrome.exe"
-        || !mouseGestureHintHwnd)
+    ; Every captured application shows the recognized path; action scope stays separate.
+    if(!IsObject(mouseGestureTarget))
         return
     path:=StrReplace(m_Gesture, "_")
+    if(path="")
+        return
+    if(!mouseGestureHintHwnd)
+        mouseGesture_hintInit()
+    if(!mouseGestureHintHwnd)
+        return
     arrows:=""
     Loop, Parse, path
     {
