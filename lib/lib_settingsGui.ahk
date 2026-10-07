@@ -4,6 +4,13 @@ global settingsGuiHwnd:=0
 global settingsGuiTrayLabel:=""
 global settingsGuiPage:="general"
 global settingsGuiPhrases:=[]
+global settingsGuiGestureRules:=[]
+global settingsGuiGestureRulesDiskSignature:=""
+global settingsGuiGestureEditIndex:=0
+global settingsGuiGestureEditorHwnd:=0
+global settingsGuiGestureBuiltinRows:=0
+global settingsGuiGestureBuiltinRules:=[]
+global settingsGuiGestureEditingBuiltin:=""
 
 settingsGui_init(){
     global settingsGuiTrayLabel
@@ -19,6 +26,8 @@ settingsGui_init(){
 
 settingsGui_show(){
     global settingsGuiHwnd, SettingsNavGeneralHighlight, SettingsNavPinHighlight, SettingsNavQbarHighlight, SettingsNavHotkeysHighlight, SettingsNavPhrasesHighlight, SettingsNavGesturesHighlight
+    global settingsGuiPage
+    global settingsGuiGestureEditorHwnd
     global SettingsNavGeneral, SettingsNavPin, SettingsNavQbar, SettingsNavHotkeys, SettingsNavPhrases, SettingsNavGestures
     global SettingsGeneralTitle, SettingsGeneralDescription, SettingsAutostart, SettingsLoadingAnimation, SettingsAllowClipboard
     global SettingsMouseSpeedLabel, SettingsMouseSpeed, SettingsSchemeLabel, SettingsHotkeyScheme
@@ -32,13 +41,25 @@ settingsGui_show(){
     global SettingsPhraseTrigger, SettingsPhraseReplacement, SettingsPhraseAddButton, SettingsPhraseDeleteButton
     global SettingsGesturesTitle, SettingsGesturesDescription, SettingsGestureEnabled, SettingsGestureDrawTrail
     global SettingsGestureThresholdLabel, SettingsGestureThreshold, SettingsGestureThresholdHint
-    global SettingsGestureTimeoutLabel, SettingsGestureTimeout, SettingsGestureTimeoutHint
-    global SettingsGestureList
+    global SettingsGestureTimeout, SettingsGestureReleaseHint
+    global SettingsGestureList, SettingsGestureAdd, SettingsGestureEdit, SettingsGestureDelete
     global SettingsGuiStatus
 
     if(settingsGuiHwnd && DllCall("IsWindow", "Ptr", settingsGuiHwnd))
     {
+        ; An editor which failed to show must not leave the owner unclickable.
+        if(!settingsGuiGestureEditorHwnd
+            || !DllCall("IsWindowVisible", "Ptr", settingsGuiGestureEditorHwnd))
+        {
+            if(settingsGuiGestureEditorHwnd)
+                Gui, GestureEditor:Destroy
+            settingsGuiGestureEditorHwnd:=0
+            Gui, SettingsGui:-Disabled
+        }
         settingsGui_loadValues()
+        ; Loading Qbar values may update controls while another page is open.
+        ; Reapply the active page before showing the existing window.
+        settingsGui_setPage(settingsGuiPage)
         Gui, SettingsGui:Show
         WinActivate, ahk_id %settingsGuiHwnd%
         return
@@ -63,14 +84,16 @@ settingsGui_show(){
         phrasesDeleteLabel:="删除"
         gesturesLabel:="鼠标手势"
         gesturesTitle:="鼠标手势"
-        gesturesDescription:="按住鼠标右键绘制轨迹，松开后执行 Chrome 或全局动作。"
+        gesturesDescription:="按住右键绘制轨迹；下方可添加仅在指定应用生效的规则。"
         gestureEnabledLabel:="启用鼠标右键手势"
         gestureTrailLabel:="绘制手势轨迹"
         gestureThresholdLabel:="移动阈值（像素）"
         gestureThresholdHint:="推荐 25；数值越小越灵敏。"
-        gestureTimeoutLabel:="手势超时（毫秒）"
-        gestureTimeoutHint:="轨迹开始后静止超过该时间将取消。"
+        gestureReleaseHint:="松开右键时执行屏幕上显示的手势；停顿不会静默取消。"
         gestureColumns:="手势|动作|范围"
+        gestureAddLabel:="新增"
+        gestureEditLabel:="编辑"
+        gestureDeleteLabel:="删除"
         qbarLabel:="Qbar"
         qbarTitle:="Qbar"
         qbarDescription:="选择 CapsLock+Q 使用内置 Qbar，或绑定外部程序。"
@@ -120,14 +143,16 @@ settingsGui_show(){
         phrasesDeleteLabel:="Delete"
         gesturesLabel:="Mouse gestures"
         gesturesTitle:="Mouse gestures"
-        gesturesDescription:="Hold the right mouse button, draw a path, then release to run an action."
+        gesturesDescription:="Hold right-click to draw; add rules scoped to a specific application below."
         gestureEnabledLabel:="Enable right-button gestures"
         gestureTrailLabel:="Draw gesture trail"
         gestureThresholdLabel:="Movement threshold (px)"
         gestureThresholdHint:="25 is recommended; lower values are more sensitive."
-        gestureTimeoutLabel:="Gesture timeout (ms)"
-        gestureTimeoutHint:="Cancel after the gesture stays still for this long."
+        gestureReleaseHint:="The gesture shown on screen runs when you release the right button, even after a pause."
         gestureColumns:="Gesture|Action|Scope"
+        gestureAddLabel:="Add"
+        gestureEditLabel:="Edit"
+        gestureDeleteLabel:="Delete"
         qbarLabel:="Qbar"
         qbarTitle:="Qbar"
         qbarDescription:="Use the built-in Qbar or bind CapsLock+Q to an external app."
@@ -170,19 +195,19 @@ settingsGui_show(){
     Gui, SettingsGui:Add, Text, x20 y22 w150 h30 BackgroundTrans, CapsLock+
     Gui, SettingsGui:Font, s9 w400 c89919D, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x20 y55 w150 h22 BackgroundTrans, %windowTitle%
-    Gui, SettingsGui:Add, Progress, x12 y96 w166 h42 vSettingsNavGeneralHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Progress, x12 y96 w4 h42 vSettingsNavGeneralHighlight Background1677FF c1677FF Disabled, 100
     Gui, SettingsGui:Font, s10 w600 cFFFFFF, Microsoft YaHei UI
-    Gui, SettingsGui:Add, Text, x28 y106 w138 h24 vSettingsNavGeneral BackgroundTrans Center gSettingsGuiShowGeneral, %generalLabel%
-    Gui, SettingsGui:Add, Progress, x12 y144 w166 h42 vSettingsNavPinHighlight Background1677FF c1677FF Disabled, 100
-    Gui, SettingsGui:Add, Text, x28 y154 w138 h24 vSettingsNavPin BackgroundTrans Center gSettingsGuiShowPin, %pinCategory%
-    Gui, SettingsGui:Add, Progress, x12 y192 w166 h42 vSettingsNavQbarHighlight Background1677FF c1677FF Disabled, 100
-    Gui, SettingsGui:Add, Text, x28 y202 w138 h24 vSettingsNavQbar BackgroundTrans Center gSettingsGuiShowQbar, %qbarLabel%
-    Gui, SettingsGui:Add, Progress, x12 y246 w166 h42 vSettingsNavHotkeysHighlight Background1677FF c1677FF Disabled, 100
-    Gui, SettingsGui:Add, Text, x28 y256 w138 h24 vSettingsNavHotkeys BackgroundTrans Center gSettingsGuiShowHotkeys, %hotkeysLabel%
-    Gui, SettingsGui:Add, Progress, x12 y300 w166 h42 vSettingsNavPhrasesHighlight Background1677FF c1677FF Disabled, 100
-    Gui, SettingsGui:Add, Text, x28 y310 w138 h24 vSettingsNavPhrases BackgroundTrans Center gSettingsGuiShowPhrases, %phrasesLabel%
-    Gui, SettingsGui:Add, Progress, x12 y348 w166 h42 vSettingsNavGesturesHighlight Background1677FF c1677FF Disabled, 100
-    Gui, SettingsGui:Add, Text, x28 y358 w138 h24 vSettingsNavGestures BackgroundTrans Center gSettingsGuiShowGestures, %gesturesLabel%
+    Gui, SettingsGui:Add, Text, x12 y96 w166 h42 vSettingsNavGeneral Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowGeneral, %generalLabel%
+    Gui, SettingsGui:Add, Progress, x12 y144 w4 h42 vSettingsNavPinHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x12 y144 w166 h42 vSettingsNavPin Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowPin, %pinCategory%
+    Gui, SettingsGui:Add, Progress, x12 y192 w4 h42 vSettingsNavQbarHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x12 y192 w166 h42 vSettingsNavQbar Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowQbar, %qbarLabel%
+    Gui, SettingsGui:Add, Progress, x12 y246 w4 h42 vSettingsNavHotkeysHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x12 y246 w166 h42 vSettingsNavHotkeys Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowHotkeys, %hotkeysLabel%
+    Gui, SettingsGui:Add, Progress, x12 y300 w4 h42 vSettingsNavPhrasesHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x12 y300 w166 h42 vSettingsNavPhrases Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowPhrases, %phrasesLabel%
+    Gui, SettingsGui:Add, Progress, x12 y348 w4 h42 vSettingsNavGesturesHighlight Background1677FF c1677FF Disabled, 100
+    Gui, SettingsGui:Add, Text, x12 y348 w166 h42 vSettingsNavGestures Border BackgroundTrans Center +0x100 +0x200 gSettingsGuiShowGestures, %gesturesLabel%
     Gui, SettingsGui:Font, s9 w400 cAAB1BA, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x22 y472 w150 h28 BackgroundTrans gSettingsGuiOpenAdvanced Center 0x200, %advancedLabel%
 
@@ -289,14 +314,16 @@ settingsGui_show(){
     Gui, SettingsGui:Add, Edit, x228 y230 w92 h30 Number vSettingsGestureThreshold
     Gui, SettingsGui:Font, s8 w400 c68717D, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x228 y264 w205 h34 vSettingsGestureThresholdHint BackgroundTrans, %gestureThresholdHint%
-    Gui, SettingsGui:Font, s9 w600 c252A31, Microsoft YaHei UI
-    Gui, SettingsGui:Add, Text, x228 y306 w195 h22 vSettingsGestureTimeoutLabel BackgroundTrans, %gestureTimeoutLabel%
-    Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
-    Gui, SettingsGui:Add, Edit, x228 y332 w92 h30 Number vSettingsGestureTimeout
     Gui, SettingsGui:Font, s8 w400 c68717D, Microsoft YaHei UI
-    Gui, SettingsGui:Add, Text, x228 y366 w205 h34 vSettingsGestureTimeoutHint BackgroundTrans, %gestureTimeoutHint%
+    Gui, SettingsGui:Add, Text, x228 y306 w205 h65 vSettingsGestureReleaseHint BackgroundTrans, %gestureReleaseHint%
+    ; Retain the legacy value for configuration compatibility, but do not
+    ; expose a timeout control that silently discards visible right gestures.
+    Gui, SettingsGui:Add, Edit, x0 y0 w1 h1 Hidden Number vSettingsGestureTimeout
     Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
-    Gui, SettingsGui:Add, ListView, x448 y112 w290 h288 vSettingsGestureList Grid NoSortHdr, %gestureColumns%
+    Gui, SettingsGui:Add, ListView, x448 y112 w290 h270 vSettingsGestureList Grid NoSortHdr, %gestureColumns%
+    Gui, SettingsGui:Add, Button, x448 y391 w88 h32 vSettingsGestureAdd gSettingsGuiGestureAdd, %gestureAddLabel%
+    Gui, SettingsGui:Add, Button, x549 y391 w88 h32 vSettingsGestureEdit gSettingsGuiGestureEdit, %gestureEditLabel%
+    Gui, SettingsGui:Add, Button, x650 y391 w88 h32 vSettingsGestureDelete gSettingsGuiGestureDelete, %gestureDeleteLabel%
     Gui, SettingsGui:Font, s9 w400 c287A46, Microsoft YaHei UI
     Gui, SettingsGui:Add, Text, x228 y432 w500 h20 vSettingsGuiStatus BackgroundTrans
     Gui, SettingsGui:Font, s9 w400 c252A31, Microsoft YaHei UI
@@ -388,7 +415,9 @@ settingsGui_loadValues(){
     GuiControl, SettingsGui:, SettingsGestureDrawTrail, %gestureDrawTrail%
     GuiControl, SettingsGui:, SettingsGestureThreshold, %gestureThreshold%
     GuiControl, SettingsGui:, SettingsGestureTimeout, %gestureTimeout%
-    settingsGui_refreshGestureList()
+    ; Read the file when opening Settings. Its in-memory copy may be stale after
+    ; another script instance or an external edit updated gesture rules.
+    settingsGui_reloadGestureRules()
     settingsGui_updateQbarExternalControls(qbarExternalApp=2)
     ; 打开或重新打开设置页时，先恢复已保存的 Qbar 路由，避免取消编辑留下临时预览状态。
     keysSet_applyQbarExternalApp()
@@ -398,37 +427,252 @@ settingsGui_loadValues(){
 }
 
 settingsGui_refreshGestureList(){
+    global settingsGuiGestureRules, settingsGuiGestureBuiltinRows, settingsGuiGestureBuiltinRules
+    Gui, SettingsGui:Default
     Gui, SettingsGui:ListView, SettingsGestureList
     LV_Delete()
-    if(isLangChinese())
+    settingsGuiGestureBuiltinRules:=[]
+    ; Three global defaults, then seven Chrome-specific defaults. An override
+    ; replaces its default row rather than appearing as a duplicate.
+    settingsGui_addBuiltinGesture("*", "L", 1, "!{Left}")
+    settingsGui_addBuiltinGesture("*", "R", 2, "!{Right}")
+    settingsGui_addBuiltinGesture("*", "DL", 10, "!{F4}")
+    settingsGui_addBuiltinGesture("chrome.exe", "DR", 3, "^t")
+    settingsGui_addBuiltinGesture("chrome.exe", "RD", 4, "^{End}")
+    settingsGui_addBuiltinGesture("chrome.exe", "RU", 5, "^{Home}")
+    settingsGui_addBuiltinGesture("chrome.exe", "UD", 6, "{F5}")
+    settingsGui_addBuiltinGesture("chrome.exe", "UL", 7, "^{PgUp}")
+    settingsGui_addBuiltinGesture("chrome.exe", "UR", 8, "^{PgDn}")
+    settingsGui_addBuiltinGesture("chrome.exe", "DL", 9, "^w")
+    settingsGuiGestureBuiltinRows:=LV_GetCount()
+    for _, rule in settingsGuiGestureRules
     {
-        LV_Add("", "←", "后退", "Chrome")
-        LV_Add("", "→", "前进", "Chrome")
-        LV_Add("", "↓→", "新建标签页", "Chrome")
-        LV_Add("", "→↓", "到页面底部", "Chrome")
-        LV_Add("", "→↑", "到页面顶部", "Chrome")
-        LV_Add("", "↑↓", "刷新", "Chrome")
-        LV_Add("", "↑←", "左侧标签页", "Chrome")
-        LV_Add("", "↑→", "右侧标签页", "Chrome")
-        LV_Add("", "↓←", "关闭标签页", "Chrome")
-        LV_Add("", "↓←", "关闭窗口", "全局回退")
-    }
-    else
-    {
-        LV_Add("", "L", "Back", "Chrome")
-        LV_Add("", "R", "Forward", "Chrome")
-        LV_Add("", "DR", "New tab", "Chrome")
-        LV_Add("", "RD", "Page bottom", "Chrome")
-        LV_Add("", "RU", "Page top", "Chrome")
-        LV_Add("", "UD", "Refresh", "Chrome")
-        LV_Add("", "UL", "Previous tab", "Chrome")
-        LV_Add("", "UR", "Next tab", "Chrome")
-        LV_Add("", "DL", "Close tab", "Chrome")
-        LV_Add("", "DL", "Close window", "Global fallback")
+        arrows:=StrReplace(StrReplace(StrReplace(StrReplace(rule.path, "U", "↑"), "D", "↓"), "L", "←"), "R", "→")
+        scope:=rule.scope="*" ? (isLangChinese() ? "全局" : "Global") : rule.scope
+        LV_Add("", arrows, mouseGesture_ruleName(rule, rule.path), scope)
     }
     LV_ModifyCol(1, 55)
     LV_ModifyCol(2, 135)
     LV_ModifyCol(3, 92)
+}
+
+settingsGui_addBuiltinGesture(scope, path, action, shortcut){
+    global settingsGuiGestureRules, settingsGuiGestureBuiltinRules
+    for _, rule in settingsGuiGestureRules
+        if(rule.scope=scope && rule.path=path)
+            return
+    arrows:=StrReplace(StrReplace(StrReplace(StrReplace(path, "U", "↑"), "D", "↓"), "L", "←"), "R", "→")
+    scopeLabel:=scope="*" ? (isLangChinese() ? "全局" : "Global") : "Chrome"
+    LV_Add("", arrows, mouseGesture_actionName(action, path), scopeLabel)
+    settingsGuiGestureBuiltinRules.Push({scope:scope, path:path, action:action
+        , kind:"send", value:shortcut, name:mouseGesture_actionName(action, path)})
+}
+
+settingsGui_reloadGestureRules(){
+    global mouseGestureRules, settingsGuiGestureRules
+    global settingsGuiGestureRulesDiskSignature
+    mouseGesture_loadRules()
+    settingsGuiGestureRules:=[]
+    for _, rule in mouseGestureRules
+        settingsGuiGestureRules.Push(rule.Clone())
+    settingsGuiGestureRulesDiskSignature:=mouseGesture_rulesSignature(mouseGestureRules)
+    settingsGui_refreshGestureList()
+}
+
+settingsGui_gestureSelectedIndex(){
+    global settingsGuiGestureBuiltinRows
+    Gui, SettingsGui:Default
+    Gui, SettingsGui:ListView, SettingsGestureList
+    selected:=LV_GetNext()
+    return selected>settingsGuiGestureBuiltinRows ? selected-settingsGuiGestureBuiltinRows : 0
+}
+
+settingsGui_gestureSelectedBuiltin(){
+    global settingsGuiGestureBuiltinRows, settingsGuiGestureBuiltinRules
+    Gui, SettingsGui:Default
+    Gui, SettingsGui:ListView, SettingsGestureList
+    selected:=LV_GetNext()
+    return selected>0 && selected<=settingsGuiGestureBuiltinRows
+        ? settingsGuiGestureBuiltinRules[selected] : ""
+}
+
+settingsGui_gestureEdit(index:=0, builtin:=""){
+    global settingsGuiHwnd, settingsGuiGestureRules, settingsGuiGestureEditIndex, settingsGuiGestureEditorHwnd
+    global settingsGuiGestureEditingBuiltin
+    if(index && !IsObject(settingsGuiGestureRules[index]))
+        return
+    if(!index && settingsGuiGestureRules.Length()>=64)
+    {
+        message:=isLangChinese() ? "最多支持 64 条自定义手势。" : "Up to 64 custom gestures are supported."
+        MsgBox, 0x40030, CapsLock+, %message%
+        return
+    }
+    settingsGuiGestureEditIndex:=index
+    settingsGuiGestureEditingBuiltin:=IsObject(builtin) ? builtin : ""
+    rule:=index ? settingsGuiGestureRules[index] : IsObject(builtin) ? builtin
+        : {name:"", scope:"chrome.exe", path:"", kind:"send", value:""}
+    chinese:=isLangChinese()
+    title:=chinese ? (index || IsObject(builtin) ? "编辑鼠标手势" : "新增鼠标手势")
+        : (index || IsObject(builtin) ? "Edit mouse gesture" : "Add mouse gesture")
+    nameLabel:=chinese ? "行为名称（中央提示）" : "Action name (center hint)"
+    appLabel:=chinese ? "适用应用进程（如 chrome.exe；* 表示全局）" : "Application process (e.g. chrome.exe; * = global)"
+    pathLabel:=chinese ? "手势方向（可输入 U/D/L/R，或点击箭头）" : "Gesture path (U/D/L/R, or click arrows)"
+    valueLabel:=chinese ? "点击框后按下 Ctrl / Alt / Shift + 主键" : "Click the box, then press Ctrl / Alt / Shift + a key"
+    clearLabel:=chinese ? "清空" : "Clear"
+    legacyHint:=chinese ? "旧规则无法直接录入；请重新按快捷键，或取消保留原规则。" : "Legacy rule cannot be captured; record a new shortcut or Cancel."
+    saveLabel:=chinese ? "确定" : "OK"
+    cancelLabel:=chinese ? "取消" : "Cancel"
+    browseLabel:=chinese ? "选择程序..." : "Browse..."
+    lockedOptions:=IsObject(builtin) ? "Disabled" : ""
+    Gui, GestureEditor:New, +OwnerSettingsGui -MaximizeBox -MinimizeBox +HwndsettingsGuiGestureEditorHwnd, %title%
+    Gui, GestureEditor:Margin, 20, 16
+    Gui, GestureEditor:Color, F7F8FB
+    Gui, GestureEditor:Font, s9 c252A31, Microsoft YaHei UI
+    Gui, GestureEditor:Add, Text, x20 y18 w420 h22, %nameLabel%
+    Gui, GestureEditor:Add, Edit, x20 y42 w440 h29 vGestureRuleName, % rule.name
+    Gui, GestureEditor:Add, Text, x20 y82 w420 h22, %appLabel%
+    Gui, GestureEditor:Add, Edit, x20 y106 w325 h29 vGestureRuleScope, % rule.scope
+    Gui, GestureEditor:Add, Button, x355 y106 w105 h29 %lockedOptions% gGestureEditorBrowse, %browseLabel%
+    Gui, GestureEditor:Add, Text, x20 y148 w420 h22, %pathLabel%
+    Gui, GestureEditor:Add, Edit, x20 y172 w275 h29 vGestureRulePath, % rule.path
+    Gui, GestureEditor:Add, Button, x305 y172 w36 h29 %lockedOptions% gGestureEditorUp, ↑
+    Gui, GestureEditor:Add, Button, x345 y172 w36 h29 %lockedOptions% gGestureEditorDown, ↓
+    Gui, GestureEditor:Add, Button, x385 y172 w36 h29 %lockedOptions% gGestureEditorLeft, ←
+    Gui, GestureEditor:Add, Button, x425 y172 w36 h29 %lockedOptions% gGestureEditorRight, →
+    Gui, GestureEditor:Add, Text, x20 y218 w440 h22, %valueLabel%
+    shortcut:=rule.kind="send" ? rule.value
+        : (rule.kind="close" && rule.scope="*" && rule.path="DL" ? "!{F4}" : "")
+    hotkey:=settingsGui_shortcutToHotkey(shortcut)
+    Gui, GestureEditor:Add, Hotkey, x20 y242 w325 h29 vGestureRuleHotkey, %hotkey%
+    Gui, GestureEditor:Add, Button, x355 y242 w105 h29 gGestureEditorClearHotkey, %clearLabel%
+    if(index && ((rule.kind!="send" && !(rule.kind="close" && rule.scope="*" && rule.path="DL"))
+        || (shortcut!="" && hotkey="")))
+        Gui, GestureEditor:Add, Text, x20 y278 w440 h25 c895D69, %legacyHint%
+    Gui, GestureEditor:Add, Button, x246 y310 w102 h32 gGestureEditorCancel, %cancelLabel%
+    Gui, GestureEditor:Add, Button, x358 y310 w102 h32 Default gGestureEditorSave, %saveLabel%
+    if(IsObject(builtin))
+    {
+        ; A default is edited as an override of its original scope and path.
+        GuiControl, GestureEditor:+ReadOnly, GestureRuleScope
+        GuiControl, GestureEditor:+ReadOnly, GestureRulePath
+    }
+    Gui, GestureEditor:Show, w480 h350 Center, %title%
+    ; Keep the main window usable if creating or showing the editor fails.
+    Gui, SettingsGui:+Disabled
+    WinActivate, ahk_id %settingsGuiGestureEditorHwnd%
+    GuiControl, GestureEditor:Focus, GestureRuleHotkey
+}
+
+settingsGui_shortcutToHotkey(shortcut){
+    modifiers:=""
+    shortcut:=Trim(shortcut)
+    Loop
+    {
+        char:=SubStr(shortcut, 1, 1)
+        if(char!="^" && char!="!" && char!="+")
+            break
+        modifiers.=char
+        shortcut:=SubStr(shortcut, 2)
+    }
+    if(RegExMatch(shortcut, "^\{([^{}]+)\}$", match))
+        shortcut:=match1
+    if(shortcut="" || InStr(shortcut, "{") || InStr(shortcut, "}"))
+        return ""
+    if(StrLen(shortcut)>1 && !RegExMatch(shortcut, "i)^(F\d{1,2}|[A-Z][A-Z0-9]*)$"))
+        return ""
+    return modifiers . shortcut
+}
+
+settingsGui_hotkeyToShortcut(hotkey){
+    modifiers:=""
+    hotkey:=Trim(hotkey)
+    Loop
+    {
+        char:=SubStr(hotkey, 1, 1)
+        if(char!="^" && char!="!" && char!="+")
+            break
+        modifiers.=char
+        hotkey:=SubStr(hotkey, 2)
+    }
+    if(hotkey="")
+        return ""
+    if(InStr(hotkey, "{") || InStr(hotkey, "}"))
+        return ""
+    if(StrLen(hotkey)=1 && RegExMatch(hotkey, "i)^[a-z0-9]$"))
+        key:=hotkey
+    else if(StrLen(hotkey)=1)
+    {
+        vk:=GetKeyVK(hotkey)
+        if(!vk)
+            return ""
+        key:="{vk" . Format("{:02X}", vk) . "}"
+    }
+    else
+        key:="{" . hotkey . "}"
+    return modifiers . key
+}
+
+settingsGui_gestureEditorClose(){
+    global settingsGuiHwnd, settingsGuiGestureEditorHwnd, settingsGuiGestureEditingBuiltin
+    Gui, GestureEditor:Destroy
+    settingsGuiGestureEditorHwnd:=0
+    settingsGuiGestureEditingBuiltin:=""
+    Gui, SettingsGui:-Disabled
+    WinActivate, ahk_id %settingsGuiHwnd%
+}
+
+settingsGui_gestureEditorSave(){
+    global GestureRuleName, GestureRuleScope, GestureRulePath, GestureRuleHotkey
+    global settingsGuiGestureRules, settingsGuiGestureEditIndex
+    global settingsGuiGestureBuiltinRows
+    global settingsGuiGestureEditingBuiltin
+    Gui, GestureEditor:Submit, NoHide
+    shortcut:=settingsGui_hotkeyToShortcut(GestureRuleHotkey)
+    if(GestureRuleHotkey!="" && shortcut="")
+    {
+        message:=isLangChinese() ? "快捷键尚未录入完整，请按下主键后再保存。" : "Press a complete shortcut before saving."
+        MsgBox, 0x40030, CapsLock+, %message%
+        return
+    }
+    scope:=IsObject(settingsGuiGestureEditingBuiltin) ? settingsGuiGestureEditingBuiltin.scope : GestureRuleScope
+    path:=IsObject(settingsGuiGestureEditingBuiltin) ? settingsGuiGestureEditingBuiltin.path : GestureRulePath
+    keepCloseSemantics:=scope="*" && path="DL" && shortcut="!{F4}"
+        && ((IsObject(settingsGuiGestureEditingBuiltin) && settingsGuiGestureEditingBuiltin.action=10)
+            || (settingsGuiGestureEditIndex && settingsGuiGestureRules[settingsGuiGestureEditIndex].kind="close"))
+    rule:=mouseGesture_makeRule(scope, path, keepCloseSemantics ? "close" : "send", shortcut, GestureRuleName)
+    if(!IsObject(rule))
+    {
+        message:=isLangChinese() ? "规则无效：应用填写进程名（如 chrome.exe）或 *；方向为 1—8 段，快捷键最多 120 字符。" : "Invalid rule: use an .exe process or *, 1–8 directions, and a shortcut up to 120 characters."
+        MsgBox, 0x40030, CapsLock+, %message%
+        return
+    }
+    if(IsObject(settingsGuiGestureEditingBuiltin)
+        && shortcut=settingsGuiGestureEditingBuiltin.value
+        && rule.name=settingsGuiGestureEditingBuiltin.name)
+    {
+        ; Saving an unchanged default must not create a redundant override.
+        settingsGui_gestureEditorClose()
+        return
+    }
+    for index, existing in settingsGuiGestureRules
+    {
+        if(index!=settingsGuiGestureEditIndex && existing.scope=rule.scope && existing.path=rule.path)
+        {
+            message:=isLangChinese() ? "同一应用与方向的规则已存在，请编辑原规则。" : "A rule for this application and path already exists."
+            MsgBox, 0x40030, CapsLock+, %message%
+            return
+        }
+    }
+    if(settingsGuiGestureEditIndex)
+        settingsGuiGestureRules[settingsGuiGestureEditIndex]:=rule
+    else
+        settingsGuiGestureRules.Push(rule)
+    settingsGui_gestureEditorClose()
+    settingsGui_refreshGestureList()
+    Gui, SettingsGui:Default
+    Gui, SettingsGui:ListView, SettingsGestureList
+    selected:=settingsGuiGestureEditIndex ? settingsGuiGestureEditIndex : settingsGuiGestureRules.Length()
+    LV_Modify(selected+settingsGuiGestureBuiltinRows, "Select Focus Vis")
 }
 
 settingsGui_loadPhrases(){
@@ -690,7 +934,7 @@ settingsGui_setPage(page){
     pinControls:="SettingsPinTitle|SettingsPinDescription|SettingsPinColorLabel|SettingsPinColorPreview|SettingsPinColorEdit|SettingsPinChooseColor|SettingsPinColorHint|SettingsPinSoundEnabled|SettingsPinSoundFileLabel|SettingsPinSoundFile|SettingsPinChooseSound|SettingsPinSoundDefaultHint"
     qbarControls:="SettingsQbarTitle|SettingsQbarDescription|SettingsQbarExternalAppLabel|SettingsQbarExternalApp|SettingsQbarExternalAppHint|SettingsQbarExternalPathLabel|SettingsQbarExternalPath|SettingsQbarChooseExternalPath|SettingsQbarExternalPathHint"
     phrasesControls:="SettingsPhrasesTitle|SettingsPhrasesDescription|SettingsPhraseListView|SettingsPhraseTriggerLabel|SettingsPhraseReplacementLabel|SettingsPhraseTrigger|SettingsPhraseReplacement|SettingsPhraseAddButton|SettingsPhraseDeleteButton"
-    gestureControls:="SettingsGesturesTitle|SettingsGesturesDescription|SettingsGestureEnabled|SettingsGestureDrawTrail|SettingsGestureThresholdLabel|SettingsGestureThreshold|SettingsGestureThresholdHint|SettingsGestureTimeoutLabel|SettingsGestureTimeout|SettingsGestureTimeoutHint|SettingsGestureList"
+    gestureControls:="SettingsGesturesTitle|SettingsGesturesDescription|SettingsGestureEnabled|SettingsGestureDrawTrail|SettingsGestureThresholdLabel|SettingsGestureThreshold|SettingsGestureThresholdHint|SettingsGestureReleaseHint|SettingsGestureList|SettingsGestureAdd|SettingsGestureEdit|SettingsGestureDelete"
     if(page="pin")
     {
         settingsGuiPage:="pin"
@@ -865,6 +1109,10 @@ settingsGui_setPage(page){
 }
 
 settingsGui_updateQbarExternalControls(showPath){
+    global settingsGuiPage
+    ; This helper also runs while loading settings on a different page.
+    ; Never let Qbar's external-path controls leak across page boundaries.
+    showPath:=showPath && settingsGuiPage="qbar"
     pathControls:="SettingsQbarExternalPathLabel|SettingsQbarExternalPath|SettingsQbarChooseExternalPath|SettingsQbarExternalPathHint"
     for index,controlName in StrSplit(pathControls, "|")
     {
@@ -887,9 +1135,15 @@ settingsGui_save(){
     global SettingsPinColorEdit, SettingsPinSoundEnabled, SettingsPinSoundFile
     global SettingsQbarExternalApp, SettingsQbarExternalPath
     global SettingsGestureEnabled, SettingsGestureDrawTrail, SettingsGestureThreshold, SettingsGestureTimeout
-    global keyset
+    global keyset, settingsGuiGestureRules, settingsGuiGestureRulesDiskSignature
 
     Gui, SettingsGui:Submit, NoHide
+    if(mouseGesture_rulesSignature(mouseGesture_readRules())!=settingsGuiGestureRulesDiskSignature)
+    {
+        message:=isLangChinese() ? "鼠标手势规则已在其他地方修改。请关闭设置并重新打开，再保存更改。" : "Gesture rules changed outside Settings. Reopen Settings before saving."
+        MsgBox, 0x40030, CapsLock+, %message%
+        return false
+    }
     oldHotkeyScheme:="capslox"
     if(IsObject(CLSets) && IsObject(CLSets.Global) && CLSets.Global.default_hotkey_scheme="capslock_plus")
         oldHotkeyScheme:="capslock_plus"
@@ -945,6 +1199,12 @@ settingsGui_save(){
         GuiControl, SettingsGui:Focus, SettingsGestureTimeout
         return false
     }
+    if(!mouseGesture_validateRules(settingsGuiGestureRules))
+    {
+        message:=isLangChinese() ? "手势规则无效或重复，请检查应用、方向和动作。" : "Gesture rules are invalid or duplicated."
+        MsgBox, 0x40030, CapsLock+, %message%
+        return false
+    }
 
     ; 内置 Qbar 不再暴露样式选项，切回内置模式时恢复项目原始样式。
     if(settingsGuiPage="qbar" && qbarExternalApp="builtin")
@@ -976,6 +1236,9 @@ settingsGui_save(){
     IniDelete, CapsLock+settings.ini, Global, listaryPath
     ; 显式保存 CapsLock+Q 的路由，避免删除默认键后旧运行实例仍保留外部程序路由。
     IniWrite, %qbarKeyValue%, CapsLock+settings.ini, Keys, caps_q
+    if(!mouseGesture_saveRules(settingsGuiGestureRules))
+        return false
+    settingsGuiGestureRulesDiskSignature:=mouseGesture_rulesSignature(settingsGuiGestureRules)
 
     if(!IsObject(CLSets.Global))
         CLSets.Global:={}
@@ -1128,6 +1391,70 @@ return
 
 SettingsGuiShowGestures:
 settingsGui_setPage("gestures")
+return
+
+SettingsGuiGestureAdd:
+settingsGui_gestureEdit()
+return
+
+SettingsGuiGestureEdit:
+gestureRuleIndex:=settingsGui_gestureSelectedIndex()
+if(gestureRuleIndex)
+    settingsGui_gestureEdit(gestureRuleIndex)
+else
+{
+    gestureBuiltin:=settingsGui_gestureSelectedBuiltin()
+    if(IsObject(gestureBuiltin))
+        settingsGui_gestureEdit(0, gestureBuiltin)
+    else
+    {
+        message:=isLangChinese() ? "请先选择一条手势规则。" : "Select a gesture rule first."
+        MsgBox, 0x40040, CapsLock+, %message%
+    }
+}
+return
+
+SettingsGuiGestureDelete:
+gestureRuleIndex:=settingsGui_gestureSelectedIndex()
+if(gestureRuleIndex)
+{
+    settingsGuiGestureRules.RemoveAt(gestureRuleIndex)
+    settingsGui_refreshGestureList()
+}
+return
+
+GestureEditorUp:
+GestureEditorDown:
+GestureEditorLeft:
+GestureEditorRight:
+direction:=A_ThisLabel="GestureEditorUp" ? "U" : A_ThisLabel="GestureEditorDown" ? "D" : A_ThisLabel="GestureEditorLeft" ? "L" : "R"
+GuiControlGet, currentPath, GestureEditor:, GestureRulePath
+GuiControl, GestureEditor:, GestureRulePath, % currentPath . direction
+return
+
+GestureEditorBrowse:
+dialogTitle:=isLangChinese() ? "选择适用应用" : "Choose application"
+FileSelectFile, selectedApp, 1, %A_ProgramFiles%, %dialogTitle%, Applications (*.exe)
+if(selectedApp!="")
+{
+    SplitPath, selectedApp, selectedAppName
+    GuiControl, GestureEditor:, GestureRuleScope, %selectedAppName%
+}
+return
+
+GestureEditorClearHotkey:
+GuiControl, GestureEditor:, GestureRuleHotkey,
+GuiControl, GestureEditor:Focus, GestureRuleHotkey
+return
+
+GestureEditorSave:
+settingsGui_gestureEditorSave()
+return
+
+GestureEditorCancel:
+GestureEditorClose:
+GestureEditorEscape:
+settingsGui_gestureEditorClose()
 return
 
 SettingsGuiPhraseListChanged:

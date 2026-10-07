@@ -1,5 +1,9 @@
 #SingleInstance force
 
+; All legacy INI and asset paths are relative to the application directory.
+; Shortcuts and elevated relaunches may otherwise start with another working directory.
+SetWorkingDir, %A_ScriptDir%
+
 ; If the script is not elevated, relaunch as administrator and kill current instance:
 full_command_line := DllCall("GetCommandLine", "str")
 if not (A_IsAdmin or RegExMatch(full_command_line, " /restart(?!\S)"))

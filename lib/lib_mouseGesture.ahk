@@ -4,6 +4,8 @@
 
 mouseGesture_init(){
     global
+    if(mouseGestureSettingsFile="")
+        mouseGestureSettingsFile:=A_ScriptDir . "\CapsLock+settings.ini"
     mouseGestureState:={trailVisible:false}
     mouseGestureTarget:=""
     mouseGestureHintHwnd:=0
@@ -34,6 +36,7 @@ mouseGesture_init(){
     ; The upstream default GUI canvas is not used inside the host application.
     hdc_canvas:=0
     mouseGesture_applySettings()
+    mouseGesture_loadRules()
     if(!mouseGesture_rendererInit())
         mouseGestureDrawTrail:=false
     OnExit("mouseGesture_onExit")
@@ -64,8 +67,170 @@ mouseGesture_applySettings(){
     m_Timeout:=mouseGestureTimeout
 }
 
+mouseGesture_loadRules(){
+    global mouseGestureRules
+    mouseGestureRules:=mouseGesture_readRules()
+}
+
+mouseGesture_readRules(){
+    global mouseGestureSettingsFile
+    rules:=[]
+    IniRead, count, %mouseGestureSettingsFile%, MouseGestureRules, Count, 0
+    if count is not integer
+        count:=0
+    count:=Max(0, Min(count+0, 64))
+    Loop, %count%
+    {
+        index:=A_Index
+        IniRead, scope, %mouseGestureSettingsFile%, MouseGestureRules, Scope%index%,
+        IniRead, path, %mouseGestureSettingsFile%, MouseGestureRules, Path%index%,
+        IniRead, kind, %mouseGestureSettingsFile%, MouseGestureRules, Kind%index%,
+        IniRead, value, %mouseGestureSettingsFile%, MouseGestureRules, Value%index%,
+        IniRead, name, %mouseGestureSettingsFile%, MouseGestureRules, Name%index%,
+        rule:=mouseGesture_makeRule(scope, path, kind, value, name)
+        if(IsObject(rule))
+            rules.Push(rule)
+    }
+    return rules
+}
+
+mouseGesture_rulesSignature(rules){
+    signature:=""
+    if(!IsObject(rules))
+        return signature
+    for _, rule in rules
+        signature.=StrLen(rule.scope) . ":" . rule.scope
+            . StrLen(rule.path) . ":" . rule.path
+            . StrLen(rule.kind) . ":" . rule.kind
+            . StrLen(rule.value) . ":" . rule.value
+            . StrLen(rule.name) . ":" . rule.name . "|"
+    return signature
+}
+
+mouseGesture_saveRules(rules){
+    global mouseGestureRules, mouseGestureSettingsFile
+    if(!mouseGesture_validateRules(rules))
+        return false
+    validated:=[]
+    for _, rule in rules
+    {
+        valid:=mouseGesture_makeRule(rule.scope, rule.path, rule.kind, rule.value, rule.name)
+        validated.Push(valid)
+    }
+    IniDelete, %mouseGestureSettingsFile%, MouseGestureRules
+    for index, rule in validated
+    {
+        IniWrite, % rule.scope, %mouseGestureSettingsFile%, MouseGestureRules, Scope%index%
+        IniWrite, % rule.path, %mouseGestureSettingsFile%, MouseGestureRules, Path%index%
+        IniWrite, % rule.kind, %mouseGestureSettingsFile%, MouseGestureRules, Kind%index%
+        IniWrite, % rule.value, %mouseGestureSettingsFile%, MouseGestureRules, Value%index%
+        IniWrite, % rule.name, %mouseGestureSettingsFile%, MouseGestureRules, Name%index%
+    }
+    count:=validated.Length()
+    IniWrite, %count%, %mouseGestureSettingsFile%, MouseGestureRules, Count
+    mouseGestureRules:=validated
+    return true
+}
+
+mouseGesture_validateRules(rules){
+    if(!IsObject(rules) || rules.Length()>64)
+        return false
+    seen:={}
+    for _, rule in rules
+    {
+        if(!IsObject(rule))
+            return false
+        valid:=mouseGesture_makeRule(rule.scope, rule.path, rule.kind, rule.value, rule.name)
+        if(!IsObject(valid))
+            return false
+        key:=valid.scope . "|" . valid.path
+        if(seen.HasKey(key))
+            return false
+        seen[key]:=true
+    }
+    return true
+}
+
+mouseGesture_normalizePath(path){
+    path:=Trim(path)
+    StringUpper, path, path
+    path:=StrReplace(path, "↑", "U")
+    path:=StrReplace(path, "↓", "D")
+    path:=StrReplace(path, "←", "L")
+    path:=StrReplace(path, "→", "R")
+    path:=StrReplace(path, " ")
+    path:=StrReplace(path, "_")
+    if(!RegExMatch(path, "^[UDLR]{1,8}$"))
+        return ""
+    previous:=""
+    Loop, Parse, path
+    {
+        if(A_LoopField=previous)
+            return ""
+        previous:=A_LoopField
+    }
+    return path
+}
+
+mouseGesture_makeRule(scope, path, kind, value, name){
+    scope:=Trim(scope)
+    StringLower, scope, scope
+    path:=mouseGesture_normalizePath(path)
+    kind:=Trim(kind)
+    StringLower, kind, kind
+    value:=Trim(value)
+    name:=Trim(name)
+    if((scope!="*" && !RegExMatch(scope, "^[a-z0-9_.-]+\.exe$")) || path=""
+        || !RegExMatch(kind, "^(send|url|close|none)$")
+        || StrLen(name)>40 || InStr(name, "`n") || InStr(name, "`r")
+        || InStr(value, "`n") || InStr(value, "`r"))
+        return ""
+    if(kind="send" && StrLen(value)>120)
+        return ""
+    if(kind="url" && (StrLen(value)>2048 || !RegExMatch(value, "i)^https?://")
+        || InStr(value, Chr(34))))
+        return ""
+    if(kind="close" || kind="none")
+        value:=""
+    return {scope:scope, path:path, kind:kind, value:value, name:name}
+}
+
+mouseGesture_matchRule(path, process){
+    global mouseGestureRules
+    StringLower, process, process
+    if(IsObject(mouseGestureRules))
+        for _, rule in mouseGestureRules
+            if(rule.path=path && rule.scope=process)
+                return rule
+    builtin:=mouseGesture_resolveAction(path, process)
+    ; Chrome-only built-ins keep their historical priority. Back/forward are
+    ; global defaults, so a user-defined global shortcut may replace them.
+    if(process="chrome.exe" && builtin && path!="L" && path!="R")
+        return {kind:"builtin", action:builtin}
+    if(IsObject(mouseGestureRules))
+        for _, rule in mouseGestureRules
+            if(rule.path=path && rule.scope="*")
+                return rule
+    return builtin ? {kind:"builtin", action:builtin} : ""
+}
+
+mouseGesture_ruleName(rule, path){
+    if(!IsObject(rule))
+        return mouseGesture_actionName(0, path)
+    if(rule.kind="builtin")
+        return mouseGesture_actionName(rule.action, path)
+    if(rule.kind="none" || (rule.kind="send" && rule.value=""))
+        return isLangChinese() ? "不执行" : "No action"
+    if(rule.name!="")
+        return rule.name
+    if(rule.kind="close")
+        return mouseGesture_actionName(10, path)
+    return rule.kind="url" ? (isLangChinese() ? "打开网址" : "Open URL")
+        : (isLangChinese() ? "发送快捷键" : "Send shortcut")
+}
+
 mouseGesture_acceptWindow(){
-    global settingsGuiHwnd
+    global settingsGuiHwnd, settingsGuiGestureEditorHwnd
     CoordMode, Mouse, Screen
     MouseGetPos,,, hwnd
     if(!hwnd)
@@ -73,7 +238,8 @@ mouseGesture_acceptWindow(){
     rootHwnd:=DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr")
     if(rootHwnd)
         hwnd:=rootHwnd
-    if(settingsGuiHwnd && hwnd=settingsGuiHwnd)
+    if((settingsGuiHwnd && hwnd=settingsGuiHwnd)
+        || (settingsGuiGestureEditorHwnd && hwnd=settingsGuiGestureEditorHwnd))
         return false
     WinGetClass, windowClass, ahk_id %hwnd%
     WinGet, process, ProcessName, ahk_id %hwnd%
@@ -104,6 +270,15 @@ mouseGesture_replayRightClick(){
     SendEvent, {RButton Up}
 }
 
+mouseGesture_beginPress(){
+    global m_Gesture, m_GestureLength, mouseGestureMoved
+    ; A quick click may release before the imported engine reaches its own
+    ; initialization. Never carry the previous gesture into a new press.
+    m_Gesture:=""
+    m_GestureLength:=0
+    mouseGestureMoved:=false
+}
+
 mouseGesture_captureTarget(){
     global mouseGestureTarget
     MouseGetPos,,, hwnd
@@ -116,14 +291,37 @@ mouseGesture_captureTarget(){
 }
 
 mouseGesture_dispatch(){
-    global mouseGestureTarget, m_Gesture
+    global mouseGestureTarget, m_Gesture, mouseGestureMoved
+    ; A click cannot dispatch a remembered direction, even if an early
+    ; release interrupted the imported recognizer before it reset its path.
+    if(!mouseGestureMoved)
+    {
+        mouseGesture_replayRightClick()
+        return true
+    }
     if(!IsObject(mouseGestureTarget))
         return false
     target:=mouseGestureTarget
     path:=StrReplace(m_Gesture, "_")
-    if(!mouseGesture_resolveAction(path, target.process))
+    rule:=mouseGesture_matchRule(path, target.process)
+    if(!IsObject(rule))
         return false
-    return mouseGesture_execute(path, target.hwnd, target.process, target.class)
+    ; Recognition already enforces the configured stroke threshold. Do not
+    ; show a recognized action and silently reject it at a second distance gate.
+    return mouseGesture_execute(rule, target.hwnd, target.process, target.class)
+}
+
+mouseGesture_lexRelease(){
+    global m_LastGestureKey, m_Gesture, m_EndX, m_EndY, lastX, lastY
+    if(m_LastGestureKey!="RButton")
+        return
+    ; A direction already visible in the hint is the direction to execute.
+    ; Do not let a final pointer wobble add an unseen segment after button-up.
+    if(m_Gesture!="")
+    {
+        m_EndX:=lastX
+        m_EndY:=lastY
+    }
 }
 
 mouseGesture_lexTrailDraw(x, y){
@@ -148,63 +346,102 @@ mouseGesture_lexTrailDraw(x, y){
 }
 
 mouseGesture_onExit(exitReason, exitCode){
-    global m_PassKeyUp, mouseGestureGdipToken
-    mouseGesture_trailStop()
-    mouseGesture_hintStop()
-    if(mouseGestureHintHwnd && DllCall("IsWindow", "Ptr", mouseGestureHintHwnd))
-        Gui, MouseGestureHint:Destroy
-    if(mouseGestureGdipToken)
-        DllCall("gdiplus\GdiplusShutdown", "Ptr", mouseGestureGdipToken)
+    global m_PassKeyUp, mouseGestureEnabled
+    global mouseGestureExitCleaned
+    if(mouseGestureExitCleaned)
+        return
+    mouseGestureExitCleaned:=true
+    ; Stop accepting gestures before cleaning up the layered trail. Suspending
+    ; hotkeys here crashes AHK v1 after a real trail has been rendered.
+    mouseGestureEnabled:=false
+    ; The host normally runs at High priority. Do not tear down GDI+ and layered
+    ; windows at High priority while the user's pointer is still moving.
+    Process, Priority,, Normal
     ; A timeout can have forwarded button-down; never leave it held on exit.
     if(m_PassKeyUp)
+    {
         SendInput, {RButton Up}
+        m_PassKeyUp:=false
+    }
+    mouseGesture_trailStop()
+    mouseGesture_hintStop()
+    ; Leave GDI+ shutdown to process termination. Calling GdiplusShutdown from
+    ; this callback can crash AHK v1 after a layered trail was rendered.
+    ; Likewise, Windows releases the hint GUI on process exit; destroying its
+    ; child controls here can crash AHK v1 after a gesture preview was shown.
 }
 
 mouseGesture_hintInit(){
     global mouseGestureHintHwnd, mouseGestureHintShown, MouseGestureHintText
+    global mouseGestureHintBoxes, mouseGestureHintArrows
     mouseGestureHintShown:=false
+    mouseGestureHintBoxes:=[]
+    mouseGestureHintArrows:=[]
     Gui, MouseGestureHint:New, +AlwaysOnTop -Caption +ToolWindow +E0x20 -DPIScale +HwndmouseGestureHintHwnd
     Gui, MouseGestureHint:Color, 241633
-    Gui, MouseGestureHint:Font, s23 cFFFFFF, Segoe UI
-    Gui, MouseGestureHint:Add, Text, vMouseGestureHintText Center x12 y10 w336 h60, 手势
+    Loop, 8
+    {
+        Gui, MouseGestureHint:Add, Progress, x0 y12 w34 h34 Background3D2A55 c614780 Disabled Hidden +HwndboxHwnd, 100
+        Gui, MouseGestureHint:Font, s16 w600 cFFFFFF, Segoe UI Symbol
+        Gui, MouseGestureHint:Add, Text, x0 y12 w34 h34 Center +0x200 BackgroundTrans Hidden +HwndarrowHwnd
+        mouseGestureHintBoxes.Push(boxHwnd)
+        mouseGestureHintArrows.Push(arrowHwnd)
+    }
+    Gui, MouseGestureHint:Font, s15 w600 cFFFFFF, Microsoft YaHei UI
+    Gui, MouseGestureHint:Add, Text, vMouseGestureHintText Center x12 y53 w336 h29 +0x200 BackgroundTrans
     WinSet, Transparent, 238, ahk_id %mouseGestureHintHwnd%
-    WinSet, Region, 0-0 w360 h80 R18-18, ahk_id %mouseGestureHintHwnd%
+    WinSet, Region, 0-0 w360 h94 R18-18, ahk_id %mouseGestureHintHwnd%
 }
 
 mouseGesture_hintUpdate(){
     global mouseGestureTarget, mouseGestureHintHwnd, mouseGestureHintShown
+    global mouseGestureHintBoxes, mouseGestureHintArrows
     global m_Gesture, m_StartX, m_StartY
-    ; Every captured application shows the recognized path; action scope stays separate.
+    ; Show every recognized path as soon as its first direction is detected.
+    ; An action binding changes the label, not whether the preview exists.
     if(!IsObject(mouseGestureTarget))
         return
     path:=StrReplace(m_Gesture, "_")
     if(path="")
+    {
+        mouseGesture_hintStop()
         return
+    }
+    rule:=mouseGesture_matchRule(path, mouseGestureTarget.process)
     if(!mouseGestureHintHwnd)
         mouseGesture_hintInit()
     if(!mouseGestureHintHwnd)
         return
-    arrows:=""
-    Loop, Parse, path
+    arrows:={L:"←", R:"→", U:"↑", D:"↓"}
+    arrowCount:=Min(StrLen(path), 8)
+    firstLeft:=Round((360-(arrowCount*34+(arrowCount-1)*6))/2)
+    Loop, 8
     {
-        if(A_LoopField="L")
-            arrows.="←"
-        else if(A_LoopField="R")
-            arrows.="→"
-        else if(A_LoopField="U")
-            arrows.="↑"
-        else if(A_LoopField="D")
-            arrows.="↓"
+        boxHwnd:=mouseGestureHintBoxes[A_Index]
+        arrowHwnd:=mouseGestureHintArrows[A_Index]
+        if(A_Index>arrowCount)
+        {
+            GuiControl, MouseGestureHint:Hide, %boxHwnd%
+            GuiControl, MouseGestureHint:Hide, %arrowHwnd%
+            continue
+        }
+        boxLeft:=firstLeft+(A_Index-1)*40
+        direction:=SubStr(path, A_Index, 1)
+        arrowText:=arrows.HasKey(direction) ? arrows[direction] : "?"
+        GuiControl, MouseGestureHint:MoveDraw, %boxHwnd%, x%boxLeft% y12 w34 h34
+        GuiControl, MouseGestureHint:MoveDraw, %arrowHwnd%, x%boxLeft% y12 w34 h34
+        GuiControl, MouseGestureHint:, %arrowHwnd%, %arrowText%
+        GuiControl, MouseGestureHint:Show, %boxHwnd%
+        GuiControl, MouseGestureHint:Show, %arrowHwnd%
     }
-    if(StrLen(arrows)>4)
-        arrows:=SubStr(arrows, 1, 4) . "…"
-    action:=mouseGesture_resolveAction(path, mouseGestureTarget.process)
-    displayText:=arrows . "  " . mouseGesture_actionName(action, path)
+    displayText:=mouseGesture_ruleName(rule, path)
+    if(StrLen(displayText)>18)
+        displayText:=SubStr(displayText, 1, 17) . "…"
     GuiControl, MouseGestureHint:, MouseGestureHintText, %displayText%
     if(mouseGestureHintShown)
         return
     left:=Round((A_ScreenWidth-360)/2)
-    top:=Round((A_ScreenHeight-80)/2)
+    top:=Round((A_ScreenHeight-94)/2)
     SysGet, monitorCount, MonitorCount
     Loop, %monitorCount%
     {
@@ -213,11 +450,11 @@ mouseGesture_hintUpdate(){
             && m_StartY>=areaTop && m_StartY<areaBottom)
         {
             left:=Round((areaLeft+areaRight-360)/2)
-            top:=Round((areaTop+areaBottom-80)/2)
+            top:=Round((areaTop+areaBottom-94)/2)
             break
         }
     }
-    Gui, MouseGestureHint:Show, x%left% y%top% w360 h80 NA
+    Gui, MouseGestureHint:Show, x%left% y%top% w360 h94 NA
     mouseGestureHintShown:=true
 }
 
@@ -228,13 +465,13 @@ mouseGesture_actionName(action, path){
             , "刷新", "左侧标签页", "右侧标签页", "关闭标签页", "关闭窗口"]
         if(action)
             return namesZh[action]
-        return (path="U" || path="D") ? "继续滑动" : "未设置动作"
+        return "未设置动作"
     }
     static namesEn:=["Back", "Forward", "New tab", "Page bottom", "Page top"
         , "Refresh", "Previous tab", "Next tab", "Close tab", "Close window"]
     if(action)
         return namesEn[action]
-    return (path="U" || path="D") ? "Keep moving" : "No action"
+    return "No action"
 }
 
 mouseGesture_hintStop(){
@@ -244,15 +481,35 @@ mouseGesture_hintStop(){
     mouseGestureHintShown:=false
 }
 
-mouseGesture_execute(path, targetHwnd, targetProcess, targetClass){
+mouseGesture_execute(rule, targetHwnd, targetProcess, targetClass){
+    if(!IsObject(rule))
+        return false
     if(!DllCall("IsWindow", "Ptr", targetHwnd))
         return false
 
-    action:=mouseGesture_resolveAction(path, targetProcess)
-    if action = 0
-        return false
+    if(rule.kind="none")
+        return true
+    if(rule.kind="url")
+    {
+        Run, % rule.value, , UseErrorLevel
+        return ErrorLevel=0
+    }
+    if(rule.kind="send")
+    {
+        if(rule.value="")
+            return true
+        if(!mouseGesture_activateTarget(targetHwnd))
+            return false
+        ; Chrome's tab-switch shortcuts need event mode even when a built-in
+        ; rule has been edited into a user shortcut with the same keys.
+        if(targetProcess="chrome.exe" && (rule.value="^{PgUp}" || rule.value="^{PgDn}"))
+            SendEvent, % rule.value
+        else
+            SendInput, % rule.value
+        return true
+    }
 
-    if action = 10
+    if(rule.kind="close" || (rule.kind="builtin" && rule.action=10))
     {
         if(!mouseGesture_canCloseWindow(targetHwnd, targetClass))
             return false
@@ -260,20 +517,22 @@ mouseGesture_execute(path, targetHwnd, targetProcess, targetClass){
         return true
     }
 
-    if targetProcess = chrome.exe
+    action:=rule.kind="builtin" ? rule.action : 0
+    if(action=1 || action=2)
     {
-        if(!WinActive("ahk_id " . targetHwnd))
-        {
-            WinActivate, ahk_id %targetHwnd%
-            WinWaitActive, ahk_id %targetHwnd%,, 1
-        }
-        if(!WinActive("ahk_id " . targetHwnd))
+        if(!mouseGesture_activateTarget(targetHwnd))
+            return false
+        if(action=1)
+            SendInput, !{Left}
+        else
+            SendInput, !{Right}
+        return true
+    }
+    if(targetProcess="chrome.exe" && action)
+    {
+        if(!mouseGesture_activateTarget(targetHwnd))
             return false
 
-        if action = 1
-            SendInput, !{Left}
-        if action = 2
-            SendInput, !{Right}
         if action = 3
             SendInput, ^t
         if action = 4
@@ -293,9 +552,22 @@ mouseGesture_execute(path, targetHwnd, targetProcess, targetClass){
     return false
 }
 
+mouseGesture_activateTarget(targetHwnd){
+    if(!WinActive("ahk_id " . targetHwnd))
+    {
+        WinActivate, ahk_id %targetHwnd%
+        WinWaitActive, ahk_id %targetHwnd%,, 1
+    }
+    return !!WinActive("ahk_id " . targetHwnd)
+}
+
 mouseGesture_resolveAction(g, p){
-    ; Exact matching is handled by upstream label dispatch; never accept a prefix.
-    static chromeActions:={L:1, R:2, DR:3, RD:4, RU:5, UD:6, UL:7, UR:8, DL:9}
+    ; Back/forward share one default in every captured application.
+    if(g="L")
+        return 1
+    if(g="R")
+        return 2
+    static chromeActions:={DR:3, RD:4, RU:5, UD:6, UL:7, UR:8, DL:9}
     if(p="chrome.exe")
         return chromeActions.HasKey(g) ? chromeActions[g] : 0
     return g="DL" ? 10 : 0
@@ -314,10 +586,16 @@ mouseGesture_canCloseWindow(hwnd, windowClass){
 mouseGesture_trailStart(startX, startY){
     global mouseGestureState, mouseGestureTrailPoints, mouseGestureTrailHwnd
     global mouseGestureGdipToken, mouseGestureTrailLastPaint
+    global mouseGestureTrailPriorityNormalized
 
     mouseGesture_trailStop()
     if(!mouseGestureGdipToken)
         return
+    if(!mouseGestureTrailPriorityNormalized)
+    {
+        Process, Priority,, Normal
+        mouseGestureTrailPriorityNormalized:=true
+    }
     mouseGestureTrailPoints:=[{x:startX, y:startY}]
     ; One layered window begins at 1x1; no uninitialized fullscreen GUI is shown.
     Gui, MouseGestureTrail:New, +AlwaysOnTop -Caption +ToolWindow +E0x20 +E0x80000 -DPIScale +HwndmouseGestureTrailHwnd
@@ -463,6 +741,9 @@ return
 #If
 
 mouseGesture_KeyDown:
+if(m_WaitForRelease && m_LastGestureKey="RButton")
+    return
+mouseGesture_beginPress()
 CoordMode, Mouse, Screen
 SendMode, Input
 SetMouseDelay, -1
@@ -476,18 +757,6 @@ return
 ^!+F12::
 Suspend, Permit
 ExitApp
-return
-
-CLMouseGesture_L:
-CLMouseGesture_R:
-CLMouseGesture_R_D:
-CLMouseGesture_R_U:
-CLMouseGesture_U_D:
-CLMouseGesture_U_L:
-CLMouseGesture_U_R:
-CLMouseGesture_D_L:
-CLMouseGesture_D_R:
-mouseGesture_dispatch()
 return
 
 #Include %A_LineFile%\..\vendor\LexikosGestureEngine.ahk

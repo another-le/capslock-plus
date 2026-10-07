@@ -81,6 +81,7 @@ FileGetTime, latestModifyTime, CapsLock+settings.ini
 if(latestModifyTime!=settingsModifyTime)
 {
     settingsModifyTime:=latestModifyTime
+    mouseGesture_loadRules()
     ;  IniRead, settingsSections, CapsLock+settings.ini, , , %A_Space%
     ;  sectionArr:=StrSplit(settingsSections,"`n")
 

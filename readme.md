@@ -1,89 +1,44 @@
-English | [中文](README_zh-CN.md)
+# CapsLock+ 增强版
 
----
+这是基于 [原版 CapsLock+](https://github.com/wo52616111/capslock-plus) 继续开发的 Windows / AutoHotkey v1 项目。保留原有的 CapsLock 组合键能力，重点改进了设置体验，并加入可按应用配置的鼠标右键手势。原项目的完整说明请见上方链接；这里主要介绍本仓库新增和改进的部分。
 
-> [!TIP]
-> <a href="https://capslox.com"><img src="https://dl.capslox.com/static/assets/image/logo/capslox-app-logo_v3_128x128@2x.png" alt="Capslox" width="80" align="left"></a>
-> **[Capslox](https://capslox.com) is the cross-platform successor to Capslock+.**
-> Capslock+ enriched the Caps Lock key. Capslox extends that idea across your whole keyboard — drive cursor, text, windows and clipboards from home row, with a default keymap that works out of the box and layered shortcuts you can change per app. Available on macOS and Windows.
+## 相比原版的主要改进
 
----
+- **右键鼠标手势**：基于 Lexikos 手势识别核心适配到 CapsLock+，支持连续方向组合、移动阈值、紫色轨迹和中央实时动作提示。松开右键时按提示中的完整手势执行；普通右键单击仍保留原有行为，未配置的滑动不会变成一次右键单击。
+- **按应用配置动作**：可以设置全局规则，或限定到 `chrome.exe`、`explorer.exe` 等进程。可在设置页新增、编辑、删除规则，也能覆盖内置规则；快捷键直接通过键盘录入。配置保存在 `CapsLock+settings.ini`，重启后继续生效。
+- **可视化设置页面**：集中管理常规选项、窗口顶置、Qbar、快捷键布局、常用语和鼠标手势，不必为这些选项反复手改 INI。
+- **Qbar 与窗口顶置**：`CapsLock+Q` 可使用内置 Qbar，也可绑定外部程序；窗口顶置增加可配置的边框提示和音效。
 
-master branch: v3.0+
+## 鼠标手势怎么用
 
-v2 branch: v2.x
+在“设置 → 鼠标手势”中启用后，按住鼠标右键移动，达到移动阈值才开始绘制轨迹并显示识别结果；松开右键执行对应动作。默认阈值为 25 像素，可在设置页调整。提示在手势结束后消失。
 
-[Docs](https://capslox.com/capslock-plus/en.html)
+默认规则如下；`↓←` 在 Chrome 中关闭当前标签页，在其他适用窗口中关闭窗口。
 
+| 范围 | 手势 | 默认动作 |
+| --- | --- | --- |
+| 全局 | ← / → | 后退 / 前进 |
+| 全局 | ↓← | 关闭窗口（Chrome 的专属规则优先） |
+| Chrome | ↓→ | 新建标签页（`Ctrl+T`） |
+| Chrome | →↓ / →↑ | 到页面底部 / 顶部 |
+| Chrome | ↑↓ | 刷新 |
+| Chrome | ↑← / ↑→ | 左侧 / 右侧标签页 |
+| Chrome | ↓← | 关闭标签页 |
 
-## How to run the source code?
-1. Download and install [AutoHotkey (v1.1.+)](http://www.ahkscript.org/)
-2. Clone the Capslock+ source code
-3. Run `Capslock+.ahk`
+新增规则时填写名称、方向和应用进程名；`*` 表示全局。方向支持 `↑↓←→` 或 `U/D/L/R`，最多 8 段。点击快捷键录入框后按下目标组合键即可；当前支持单一主键，以及 Ctrl、Alt、Shift 组合，不支持 Win 键或多段按键序列。默认规则也可以编辑；删除对默认规则的覆盖后会恢复默认值。
 
-## How to set a custom function to a hotkey?
-1. There is a key function `keyFunc_example2` in demo.ahk.
-2. Add below setting under the [Keys] section in `CapsLock+settings.ini`:
-    `caps_f7=keyFunc_example2`
-3. Save, reload Capslock+ (CapsLock+F5)
-4. Press `CapsLock+F7` to invoke the function
+自定义规则通常通过发送快捷键执行，目标应用是否响应该快捷键取决于应用自身。例如在资源管理器中可以自定义 `↑` → `Alt+↑`，用于返回上一级目录。默认的全局“关闭窗口”使用定向关闭消息。Chrome 新标签页显示什么页面由 Chrome 的新标签页设置决定。桌面、任务栏、菜单和本项目设置窗口不拦截右键；在其他被捕获的应用中，右键拖动由手势接管，不再执行该应用的原生右键拖动。
 
-* In order to avoid calling the internal functions, all the key functions are restricted to start with `keyfunc_`
+## 运行与验证
 
-An example here:
+1. 安装 AutoHotkey **v1.1**（不是 v2）。
+2. 直接运行根目录的 `CapsLock+.ahk`；脚本会按现有入口逻辑请求管理员权限，无需运行单独的 EXE。
+3. 在程序设置页按需开启或调整手势。紧急退出快捷键为 `Ctrl+Alt+Shift+F12`。
 
-### Replace Capslock+Q with Listary
-Listary is a good app launcher, now I want to add two features to it:
+手势回归测试：
 
-1. Activate Listary with `CapsLock+Q`
-2. I want to fill the selected text into the pop-up text input box
-
-We can make it like this:
-
-1. Copy the following code to `/userAHK/main.ahk`:
-```ahk
-keyfunc_listary(){
-    ; Get the selected text
-    selText:=getSelText()
-
-    ; Send win+F (the default hotkey of Listary) to activate Listary
-    sendinput, #{f}
-
-    ; Wait until Listary is activated
-    winwait, ahk_exe Listary.exe, , 0.5
-
-    ; If there is any selected text
-    if(selText){
-        ; Add "gg " before the selected text to google
-        selText:="gg " . selText
-
-        ; Fill the text, and press `home` key to move the cursor to the beginning,
-        ; in order to add other keywords if you need.
-        sendinput, %selText%{home}
-    }
-}
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/test_mouseGestureEngine.ps1
 ```
 
-2. Add a setting `caps_q=keyfunc_listary()` under `[Keys]` section in `CapsLock+settings.ini`, save, press `CapsLock+F5` to reload, done.
-
-## How to modify the original functions?
-`CapsLock+.ahk` is the entry file, library files are in the `/lib` folder,
-the function of each file is as follows:
-
-|Filename|Description|
-|:---|:---|
-|lib_bindWins.ahk|Window binding|
-|lib_clQ.ahk|qbar|
-|lib_clTab.ahk|CapsLock+Tab|
-|lib_functions.ahk|Some utils|
-|lib_init.ahk|Program initialization|
-|lib_jsEval.ahk|The calculation function implemented by using the IE engine, required by Math Board and CapsLock+Tab|
-|lib_json.ahk|json library|
-|lib_keysFunction.ahk|All the key functions|
-|lib_keysSet.ahk|Hotkey layouts|
-|lib_loadAnimation.ahk|Loading animation when the program starts|
-|lib_mathBoard.ahk|Math Board|
-|lib_mouseSpeed.ahk|Mouse speed modification|
-|lib_settings.ahk|Load the settings in CapsLock+settings.ini|
-|lib_ydTrans.ahk|Youdao Translation|
-
+测试使用独立的模拟输入，不会向桌面发送鼠标事件。手势识别核心移植自 [Lexikos/Gestures.ahk](https://github.com/Lexikos/Gestures.ahk)，规则配置设计参考 [ayuanx/AutoHotKey_MouseGesture](https://github.com/ayuanx/AutoHotKey_MouseGesture)。本项目沿用仓库中的 [GPL-2.0 许可证](LICENSE)。

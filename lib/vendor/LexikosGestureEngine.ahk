@@ -2,7 +2,7 @@
 ; 04dfb9269351798a9f16a1cdc0de7c67576e0560 (Lexikos / Steve Gray).
 ; Recognition, lifecycle, default button replay and dispatch are upstream code.
 ; Renderer/hint callbacks and host right-button adaptations were added.
-; See references/README.md for integration details.
+; Upstream: https://github.com/Lexikos/Gestures.ahk
 
 CancelGesture:
     Hotkey, *Escape, CancelGesture, Off
@@ -11,7 +11,9 @@ return
 
 GestureKey_Up:
     Hotkey, %A_ThisHotkey%, Off
+    CoordMode, Mouse, Screen  ; CapsLock+ uses screen coordinates in both hotkey threads.
     MouseGetPos, m_EndX, m_EndY
+    mouseGesture_lexRelease()  ; CapsLock+ freezes the previewed path on release.
     G_ExitGesture()
     if m_PassKeyUp
     {
@@ -233,7 +235,7 @@ GestureKeyless:
     mouseGesture_hintStop()  ; Release-endpoint sampling can re-show the hint after button-up.
 
     ; Cancel gesture if the mouse was immobile for too long after the last stroke.
-    if (m_Timeout && A_TickCount-beginTimeout > m_Timeout)
+    if (m_Timeout && A_TickCount-beginTimeout > m_Timeout && m_LastGestureKey!="RButton")
     {
         ; Gesture timed out.
         if !m_DisableDing && m_LastGestureKey
@@ -263,6 +265,11 @@ G_PerformAction(action_name)
 {
     local action, params, final_name
         , list := m_LastGestureKey ? m_GesturePrefix ",Default" : m_KeylessPrefix
+
+    ; All CapsLock+ right-button paths, built-in or user-defined, share one
+    ; matcher and executor. The upstream recognition lifecycle stays unchanged.
+    if (m_LastGestureKey="RButton" && m_GesturePrefix="CLMouseGesture")
+        return mouseGesture_dispatch()
 
     Loop, Parse, list, `,
     {
