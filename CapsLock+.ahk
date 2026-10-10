@@ -132,6 +132,9 @@ return
 
 OnClipboardChange:  ; 剪贴板内容改变时将运行
 
+if (deleteToLineEndClipboardActive)
+    return
+
 ; 如果有复制操作时，capslock键没有按下，那就是系统原生复制
 if (allowRunOnClipboardChange && !CapsLock && CLsets.global.allowClipboard != "0")
 {

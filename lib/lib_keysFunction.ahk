@@ -192,7 +192,25 @@ keyFunc_deleteToLineBeginning(){
 }
 
 keyFunc_deleteToLineEnd(){
-    SendInput,+{End}{bs}
+    global deleteToLineEndClipboardActive
+    oldDelay:=A_KeyDelay
+    oldDuration:=A_KeyDuration
+    ; 给 Shift+End 留出按键时长，但不等待剪贴板回传。
+    SetKeyDelay, 0, 20
+    WinGet, activeProcess, ProcessName, A
+    if RegExMatch(activeProcess, "i)^(chrome|msedge|firefox|brave|opera|vivaldi)\.exe$")
+    {
+        ; 浏览器输入框无选区时剪切不会误删单个字符。
+        oldClipboard:=ClipboardAll
+        deleteToLineEndClipboardActive:=true
+        SendEvent, +{End}^x
+        Clipboard:=oldClipboard
+        Sleep, 20
+        deleteToLineEndClipboardActive:=false
+    }
+    else
+        SendEvent, +{End}{Delete}
+    SetKeyDelay, %oldDelay%, %oldDuration%
     Return
 }
 
