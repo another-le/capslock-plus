@@ -118,20 +118,18 @@ keyFunc_delete(){
 }
 
 keyFunc_deleteAll(){
-    SendInput, ^{a}{delete}
+    keyFunc_deleteSelectedText("^a")
     Return
 }
 
 keyFunc_deleteWord(){
-    SendInput, +^{left}
-    SendInput, {delete}
+    keyFunc_deleteSelectedText("+^{Left}")
     Return
 }
 
 
 keyFunc_forwardDeleteWord(){
-    SendInput, +^{right}
-    SendInput, {delete}
+    keyFunc_deleteSelectedText("+^{Right}")
     Return
 }
 
@@ -147,7 +145,7 @@ keyFunc_translate(){
     {
         ClipboardOld:=ClipboardAll
         Clipboard:=""
-        SendInput, ^{Left}^+{Right}^{insert}
+        keyFunc_sendTimedKeys("^{Left}^+{Right}^{Insert}")
         ClipWait, 0.05
         selText:=Clipboard
         ydTranslate(selText)
@@ -182,50 +180,60 @@ keyFunc_moveToPageEnd(){
 }
 
 keyFunc_deleteLine(){
-    SendInput,{End}+{home}{bs}
+    keyFunc_deleteSelectedText("{End}+{Home}")
     Return
 }
 
 keyFunc_deleteToLineBeginning(){
-    SendInput,+{Home}{bs}
+    keyFunc_deleteSelectedText("+{Home}")
     Return
 }
 
 keyFunc_deleteToLineEnd(){
-    global deleteToLineEndClipboardActive
-    oldDelay:=A_KeyDelay
-    oldDuration:=A_KeyDuration
-    ; 给 Shift+End 留出按键时长，但不等待剪贴板回传。
-    SetKeyDelay, 0, 20
+    keyFunc_deleteSelectedText("+{End}")
+    Return
+}
+
+keyFunc_deleteSelectedText(selectionKeys){
+    global deleteSelectionClipboardActive
     WinGet, activeProcess, ProcessName, A
     if RegExMatch(activeProcess, "i)^(chrome|msedge|firefox|brave|opera|vivaldi)\.exe$")
     {
         ; 浏览器输入框无选区时剪切不会误删单个字符。
         oldClipboard:=ClipboardAll
-        deleteToLineEndClipboardActive:=true
-        SendEvent, +{End}^x
+        deleteSelectionClipboardActive:=true
+        keyFunc_sendTimedKeys(selectionKeys . "^x")
         Clipboard:=oldClipboard
         Sleep, 20
-        deleteToLineEndClipboardActive:=false
+        deleteSelectionClipboardActive:=false
     }
     else
-        SendEvent, +{End}{Delete}
+        keyFunc_sendTimedKeys(selectionKeys . "{Delete}")
+    Return
+}
+
+keyFunc_sendTimedKeys(keys){
+    oldDelay:=A_KeyDelay
+    oldDuration:=A_KeyDuration
+    ; 给连续按键留出按下时长，不等待剪贴板回传。
+    SetKeyDelay, 0, 20
+    SendEvent, %keys%
     SetKeyDelay, %oldDelay%, %oldDuration%
     Return
 }
 
 keyFunc_deleteToPageBeginning(){
-    SendInput,+^{Home}{bs}
+    keyFunc_deleteSelectedText("+^{Home}")
     Return
 }
 
 keyFunc_deleteToPageEnd(){
-    SendInput,+^{End}{bs}
+    keyFunc_deleteSelectedText("+^{End}")
     Return
 }
 
 keyFunc_enterWherever(){
-    SendInput,{End}{Enter}
+    keyFunc_sendTimedKeys("{End}{Enter}")
     Return
 }
 
@@ -374,7 +382,7 @@ keyFunc_cut_1(){
     ClipWait, 0.1
     if (ErrorLevel)
     {
-        SendInput,{home}+{End}^{x}
+        keyFunc_sendTimedKeys("{Home}+{End}^x")
         ClipWait, 0.1
     }
     if (!ErrorLevel)
@@ -405,7 +413,7 @@ keyFunc_copy_1(){
     ClipWait, 0.1
     if (ErrorLevel)
     {
-        SendInput,{home}+{End}^{insert}{End}
+        keyFunc_sendTimedKeys("{Home}+{End}^{Insert}{End}")
         ClipWait, 0.1
     }
     if (!ErrorLevel)
@@ -470,7 +478,7 @@ keyFunc_cut_2(){
     ClipWait, 0.1
     if (ErrorLevel)
     {
-        SendInput,{home}+{End}^{x}
+        keyFunc_sendTimedKeys("{Home}+{End}^x")
         ClipWait, 0.1
     }
     if (!ErrorLevel)
@@ -501,7 +509,7 @@ keyFunc_copy_2(){
     ClipWait, 0.1
     if (ErrorLevel)
     {
-        SendInput,{home}+{End}^{insert}{End}
+        keyFunc_sendTimedKeys("{Home}+{End}^{Insert}{End}")
         ClipWait, 0.1
     }
     if (!ErrorLevel)
@@ -636,15 +644,13 @@ keyFunc_selectToPageEnd(){
 
 
 keyFunc_selectCurrentWord(){
-    SendInput, ^{Left}
-    SendInput, +^{Right}
+    keyFunc_sendTimedKeys("^{Left}+^{Right}")
     return
 }
 
 
 keyFunc_selectCurrentLine(){
-    SendInput, {Home}
-    SendInput, +{End}
+    keyFunc_sendTimedKeys("{Home}+{End}")
     return
 }
 

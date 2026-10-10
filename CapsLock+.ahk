@@ -132,7 +132,7 @@ return
 
 OnClipboardChange:  ; 剪贴板内容改变时将运行
 
-if (deleteToLineEndClipboardActive)
+if (deleteSelectionClipboardActive)
     return
 
 ; 如果有复制操作时，capslock键没有按下，那就是系统原生复制
