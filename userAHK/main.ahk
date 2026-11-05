@@ -48,15 +48,28 @@ keyFunc_qbarExternalApp(){
     Process, Exist, %externalExeName%
     if(!ErrorLevel)
     {
-        quotedExternalPath:="""" . externalPath . """"
-        Run, %quotedExternalPath%,, UseErrorLevel
+        ; CapsLock+ runs elevated, so a plain Run would launch the external app
+        ; as administrator too - inherited from this process. That breaks apps
+        ; which must stay at normal integrity (e.g. iTunes.SMTC.exe stops
+        ; publishing media sessions). Route through explorer.exe, which always
+        ; runs unelevated, so the child lands at normal integrity.
+        if(A_IsAdmin)
+        {
+            Run, explorer.exe "%externalPath%",, UseErrorLevel
+            Sleep, 900
+        }
+        else
+        {
+            quotedExternalPath:="""" . externalPath . """"
+            Run, %quotedExternalPath%,, UseErrorLevel
+            Sleep, 300
+        }
         if(ErrorLevel)
         {
             message:="The external application could not be started. Check its path."
             MsgBox, 0x40030, CapsLock+, %message%
             return
         }
-        Sleep, 300
     }
     if(isListary)
     {
