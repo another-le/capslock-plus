@@ -105,8 +105,8 @@ winPinSoundEnabled=1
 ;自定义顶置提示音 WAV 文件；留空时使用 PowerToys 同款默认音效
 winPinSoundFile=
 
-;保持唤醒的唤醒方式，display为屏幕和系统都保持唤醒（默认），system为只阻止系统睡眠、屏幕仍按电源计划关闭
-awakeMode=display
+;保持唤醒的初始状态，off为关闭（默认），system为只阻止系统睡眠、屏幕仍按电源计划关闭，display为屏幕和系统都保持唤醒
+awakeMode=off
 
 ;----------------------------------------------------------------
 ; ## Qbar搜索指令设置

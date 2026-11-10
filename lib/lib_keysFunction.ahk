@@ -857,9 +857,9 @@ keyFunc_winPin(){
     return
 }
 
-; 保持唤醒（防止息屏 / 休眠），默认绑定 Caps+F10
+; 保持唤醒，默认绑定 Caps+F10，三档循环：全关 -> 只防睡眠 -> 屏幕常亮 -> 全关
 keyFunc_toggleAwake(){
-    awake_toggle()
+    awake_cycle()
     return
 }
 

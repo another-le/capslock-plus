@@ -9,15 +9,25 @@
 ; 沿用本仓库已有风格（深色圆角提示窗，与鼠标手势提示同一视觉语言）。
 ;
 ; 入口：
-;   - 托盘图标右键菜单「防止息屏与睡眠」（带勾选状态）
-;   - 托盘右键菜单「唤醒方式」子菜单：屏幕常亮 + 系统不睡眠 / 仅系统不睡眠
+;   - 托盘图标右键菜单「保持屏幕常亮」
+;   - 托盘图标右键菜单「防止系统睡眠」
 ;   - Caps+F10（默认绑定，可在 CapsLock+settings.ini 的 [Keys] 中改）
+;
+; 两个开关各管一件系统本来会自己做的事，勾选状态就是当前生效状态，
+; 勾着即开着，不再有「勾着不代表开着」这种需要解释的中间层。
+; 包含关系：屏幕亮着，系统必然不能睡，所以打开「保持屏幕常亮」会自动
+; 带上「防止系统睡眠」；反过来只防睡眠是合理的（例如夜里下载，屏幕可黑）。
 
 ; 本文件只有函数和标签，没有顶层可执行语句。
 ; 注意：lib_init.ahk 开头的 return 已经结束了 auto-execute 段，
 ; 所以这里顶层的 global 赋值不会被自动执行，必须由 awake_init() 负责初始化。
-global awakeActive
+;
+; 两个开关是独立的状态位，组合起来就是 Caps+F10 的三档：
+;   awakeKeepDisplay=1, awakeKeepSystem=1  屏幕常亮（同时必然不睡眠）
+;   awakeKeepDisplay=0, awakeKeepSystem=1  只防止系统睡眠，屏幕照常关闭
+;   awakeKeepDisplay=0, awakeKeepSystem=0  都没开，交回系统电源计划
 global awakeKeepDisplay
+global awakeKeepSystem
 global awakeTrayMenuBuilt
 global awakeOsdHwnd
 global awakeReassertInterval
@@ -28,11 +38,11 @@ global AWKE_ES_SYSTEM_REQUIRED
 global AWKE_ES_DISPLAY_REQUIRED
 
 awake_init(){
-    global awakeActive, awakeKeepDisplay, awakeTrayMenuBuilt, awakeOsdHwnd, awakeReassertInterval
+    global awakeKeepDisplay, awakeKeepSystem, awakeTrayMenuBuilt, awakeOsdHwnd, awakeReassertInterval
     global AWKE_ES_CONTINUOUS, AWKE_ES_SYSTEM_REQUIRED, AWKE_ES_DISPLAY_REQUIRED
 
-    awakeActive:=false
-    awakeKeepDisplay:=true
+    awakeKeepDisplay:=false
+    awakeKeepSystem:=false
     awakeTrayMenuBuilt:=false
     awakeOsdHwnd:=0
     awakeReassertInterval:=60000
@@ -47,72 +57,73 @@ awake_init(){
     return
 }
 
+; 屏幕上任何东西要能看见，系统就必须是醒的，所以「屏幕常亮」蕴含「不睡眠」；
+; 反过来不成立。这个约束在这里统一兜住，各调用点就不用重复判断。
+awake_normalize(){
+    global awakeKeepDisplay, awakeKeepSystem
+    if(awakeKeepDisplay)
+        awakeKeepSystem:=true
+    return
+}
+
+awake_isActive(){
+    global awakeKeepDisplay, awakeKeepSystem
+    return awakeKeepDisplay || awakeKeepSystem
+}
+
 awake_readMode(){
-    global awakeKeepDisplay
-    IniRead, awakeMode, CapsLock+settings.ini, Global, awakeMode, display
-    awakeKeepDisplay:=(awakeMode!="system")
-    awake_applyModeChecks()
+    global awakeKeepDisplay, awakeKeepSystem
+    IniRead, awakeMode, CapsLock+settings.ini, Global, awakeMode, off
+    awakeKeepDisplay:=(awakeMode="display")
+    awakeKeepSystem:=(awakeMode="display" || awakeMode="system")
+    awake_applyChecks()
     return
 }
 
 ; 托盘菜单由 lib_settingsGui.ahk 的 settingsGui_init() 在 NoStandard/Standard
-; 之间调用，因此这两个菜单项自然落在「设置...」之下、系统标准项之上。
+; 之间调用，因此这一项自然落在「设置...」之下、系统标准项之上。
+; 父项「防止息屏与睡眠」下面挂两个子开关，各自独立勾选；
+; 勾选状态就是该功能此刻是否生效，不做「子菜单勾着但总开关关着」这种两层判断。
 awake_buildTrayMenu(){
     global awakeTrayMenuBuilt
-    Menu, Tray, Add, % awake_trayLabel(), awakeMenuToggle
-    Menu, AwakeMode, Add, % awake_modeLabel(true), awakeMenuModeDisplay
-    Menu, AwakeMode, Add, % awake_modeLabel(false), awakeMenuModeSystem
-    Menu, Tray, Add, % awake_modeMenuLabel(), :AwakeMode
+
+    Menu, awakeTrayMenu, Add, % awake_displayLabel(), awakeMenuDisplay
+    Menu, awakeTrayMenu, Add, % awake_systemLabel(), awakeMenuSystem
+    Menu, Tray, Add, % awake_trayLabel(), :awakeTrayMenu
+
     awakeTrayMenuBuilt:=true
-    awake_applyModeChecks()
-    awake_applyToggleCheck()
+    awake_applyChecks()
     return
 }
 
 ; 菜单项名称必须保持稳定：Menu 的 Check/Uncheck 是按名称定位的，
-; 而按键绑定是可以通过 [Keys] 改掉的，所以按键提示只放进提示窗。
+; 而按键绑定可以通过 [Keys] 改掉，所以按键提示只放进提示窗。
 awake_trayLabel(){
     return isLangChinese() ? "防止息屏与睡眠" : "Prevent screen off and sleep"
 }
 
-awake_modeMenuLabel(){
-    return isLangChinese() ? "唤醒方式" : "Awake mode"
+awake_displayLabel(){
+    return isLangChinese() ? "保持屏幕常亮" : "Keep the display on"
 }
 
-; 这里的名字必须和开关项（awake_trayLabel）明显不同：
-; 子菜单的勾选表示“当前用的是哪种方式”，并不表示“功能已开启”，
-; 两者重名时用户会误以为勾着就是开着的。
-awake_modeLabel(display){
-    if(isLangChinese())
-        return display ? "屏幕常亮 + 系统不睡眠" : "仅系统不睡眠"
-    return display ? "Display and system stay awake" : "System stays awake only"
+awake_systemLabel(){
+    return isLangChinese() ? "防止系统睡眠" : "Prevent system sleep"
 }
 
-awake_applyModeChecks(){
-    global awakeKeepDisplay, awakeTrayMenuBuilt
+; 两个子开关的勾选状态都要刷新：屏幕常亮蕴含系统不睡眠，
+; 所以两项之间不会出现「屏幕亮着却没勾不睡眠」的自相矛盾组合。
+awake_applyChecks(){
+    global awakeKeepDisplay, awakeKeepSystem, awakeTrayMenuBuilt
     if(!awakeTrayMenuBuilt)
         return
     if(awakeKeepDisplay)
-    {
-        Menu, AwakeMode, Check, % awake_modeLabel(true)
-        Menu, AwakeMode, Uncheck, % awake_modeLabel(false)
-    }
+        Menu, awakeTrayMenu, Check, % awake_displayLabel()
     else
-    {
-        Menu, AwakeMode, Uncheck, % awake_modeLabel(true)
-        Menu, AwakeMode, Check, % awake_modeLabel(false)
-    }
-    return
-}
-
-awake_applyToggleCheck(){
-    global awakeActive, awakeTrayMenuBuilt
-    if(!awakeTrayMenuBuilt)
-        return
-    if(awakeActive)
-        Menu, Tray, Check, % awake_trayLabel()
+        Menu, awakeTrayMenu, Uncheck, % awake_displayLabel()
+    if(awakeKeepSystem)
+        Menu, awakeTrayMenu, Check, % awake_systemLabel()
     else
-        Menu, Tray, Uncheck, % awake_trayLabel()
+        Menu, awakeTrayMenu, Uncheck, % awake_systemLabel()
     return
 }
 
@@ -154,62 +165,96 @@ awake_keyName(key){
     return key
 }
 
-awakeMenuToggle:
-awake_toggle()
+; 两个子项各自是独立的开关，点哪项就只翻转哪项。
+; 唯一的方向性约束：打开「保持屏幕常亮」必须同时保证系统不睡眠，
+; 否则屏幕亮着而系统睡下去，屏幕上什么也看不见（见 awake_normalize）。
+awakeMenuDisplay:
+awake_toggleDisplay()
 return
 
-awakeMenuModeDisplay:
-awake_setMode(true)
+awakeMenuSystem:
+awake_toggleSystem()
 return
 
-awakeMenuModeSystem:
-awake_setMode(false)
-return
+awake_toggleDisplay(){
+    global awakeKeepDisplay, awakeKeepSystem
+    awakeKeepDisplay:=!awakeKeepDisplay
+    if(awakeKeepDisplay)
+        awakeKeepSystem:=true
+    awake_commit()
+    return
+}
 
-; 切换开关：开 -> 关，关 -> 开
-awake_toggle(){
-    global awakeActive
-    awakeActive:=!awakeActive
-    if(awakeActive)
+awake_toggleSystem(){
+    global awakeKeepDisplay, awakeKeepSystem
+    awakeKeepSystem:=!awakeKeepSystem
+    ; 关掉不睡眠时，如果屏幕还要求常亮就矛盾了，一并取消屏幕常亮
+    if(!awakeKeepSystem)
+        awakeKeepDisplay:=false
+    awake_commit()
+    return
+}
+
+; Caps+F10 三档循环：全关 -> 只防睡眠 -> 屏幕常亮 -> 全关
+awake_cycle(){
+    global awakeKeepDisplay, awakeKeepSystem
+    if(!awakeKeepDisplay && !awakeKeepSystem)
+        awakeKeepSystem:=true
+    else if(!awakeKeepDisplay && awakeKeepSystem)
+        awakeKeepDisplay:=true
+    else
+    {
+        awakeKeepDisplay:=false
+        awakeKeepSystem:=false
+    }
+    awake_commit()
+    return
+}
+
+; 菜单和热键共用的收尾：归一化状态、下发到系统、刷新勾选、弹提示
+awake_commit(){
+    awake_normalize()
+    if(awake_isActive())
         awake_apply()
     else
         awake_release()
-    awake_applyToggleCheck()
+    awake_saveMode()
+    awake_applyChecks()
     awake_showHint()
     return
 }
 
-; 切换唤醒方式（屏幕常亮 / 仅系统不睡眠），开启状态下立即生效
-awake_setMode(keepDisplay){
-    global awakeActive, awakeKeepDisplay
-    if(awakeKeepDisplay=keepDisplay)
-    {
-        awake_applyModeChecks()
-        return
-    }
-    awakeKeepDisplay:=keepDisplay
-    setSettings("Global", "awakeMode", keepDisplay ? "display" : "system")
-    awake_applyModeChecks()
-    if(awakeActive)
-        awake_apply()
-    awake_showHint()
+; 当前组合写回配置，下次启动沿用
+awake_saveMode(){
+    global awakeKeepDisplay, awakeKeepSystem
+    if(awakeKeepDisplay)
+        mode:="display"
+    else if(awakeKeepSystem)
+        mode:="system"
+    else
+        mode:="off"
+    setSettings("Global", "awakeMode", mode)
     return
 }
 
-; 设置文件被外部改动时同步唤醒方式
+; 设置文件被外部改动时同步状态
 awake_refreshSettings(){
     awake_readMode()
-    if(awakeActive)
+    if(awake_isActive())
         awake_apply()
+    else
+        awake_release()
     return
 }
 
 ; 向系统声明需求。重复调用是安全的：每次都整体重设本线程的状态。
 awake_apply(){
-    global awakeKeepDisplay, awakeReassertInterval
+    global awakeKeepDisplay, awakeKeepSystem, awakeReassertInterval
     global AWKE_ES_CONTINUOUS, AWKE_ES_SYSTEM_REQUIRED, AWKE_ES_DISPLAY_REQUIRED
 
-    flags:=AWKE_ES_CONTINUOUS | AWKE_ES_SYSTEM_REQUIRED
+    flags:=AWKE_ES_CONTINUOUS
+    if(awakeKeepSystem)
+        flags:=flags | AWKE_ES_SYSTEM_REQUIRED
     if(awakeKeepDisplay)
         flags:=flags | AWKE_ES_DISPLAY_REQUIRED
 
@@ -228,7 +273,7 @@ awake_release(){
 }
 
 awake_reassert:
-if(!awakeActive)
+if(!awake_isActive())
 {
     SetTimer, awake_reassert, Off
     return
@@ -244,36 +289,54 @@ awake_onExit(exitReason, exitCode){
 
 ; ---------------- 提示 ----------------
 ; 深色圆角小窗，不抢焦点，约 1.8 秒后自动消失
+; 三个状态对应 Caps+F10 的三档，菜单点击只会在「全开」和「全关」之间走
 awake_showHint(){
-    global awakeActive, awakeKeepDisplay
+    global awakeKeepDisplay, awakeKeepSystem
 
     hotkey:=awake_hotkeyHint()
     if(hotkey="")
         hotkey:=isLangChinese() ? "未绑定按键" : "no hotkey"
     else
-        hotkey:=hotkey . (isLangChinese() ? " 切换" : " toggles")
+        hotkey:=hotkey . (isLangChinese() ? " 再按可切换模式" : " cycles modes")
 
+    active:=awake_isActive()
     if(isLangChinese())
     {
-        title:=awakeActive ? "已开启：防止息屏与睡眠" : "已关闭：防止息屏与睡眠"
-        if(!awakeActive)
+        if(!active)
+        {
+            title:="已关闭：保持唤醒"
             sub:="已交回系统电源计划 · " . hotkey
+        }
+        else if(awakeKeepDisplay)
+        {
+            title:="已开启：屏幕常亮 + 系统不睡眠"
+            sub:="屏幕不会关闭，系统不会睡眠 · " . hotkey
+        }
         else
-            sub:=awakeKeepDisplay
-                ? "屏幕不会关闭，系统不会睡眠 · " . hotkey
-                : "系统不会睡眠，屏幕仍按计划关闭 · " . hotkey
+        {
+            title:="已开启：防止系统睡眠"
+            sub:="系统不会睡眠，屏幕仍按计划关闭 · " . hotkey
+        }
     }
     else
     {
-        title:=awakeActive ? "Keep-awake: on" : "Keep-awake: off"
-        if(!awakeActive)
+        if(!active)
+        {
+            title:="Keep-awake: off"
             sub:="Your power plan is back in control · " . hotkey
+        }
+        else if(awakeKeepDisplay)
+        {
+            title:="Keep-awake: display and PC"
+            sub:="Display and PC stay awake · " . hotkey
+        }
         else
-            sub:=awakeKeepDisplay
-                ? "Display and PC stay awake · " . hotkey
-                : "PC stays awake, display may still sleep · " . hotkey
+        {
+            title:="Keep-awake: PC only"
+            sub:="PC stays awake, display may still sleep · " . hotkey
+        }
     }
-    awake_osdShow(title, sub, awakeActive)
+    awake_osdShow(title, sub, active)
     return
 }
 

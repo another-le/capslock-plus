@@ -8,7 +8,7 @@
 - **按应用配置动作**：可以设置全局规则，或限定到 `chrome.exe`、`explorer.exe` 等进程。可在设置页新增、编辑、删除规则，也能覆盖内置规则；快捷键直接通过键盘录入。配置保存在 `CapsLock+settings.ini`，重启后继续生效。
 - **可视化设置页面**：集中管理常规选项、窗口顶置、Qbar、快捷键布局、常用语和鼠标手势，不必为这些选项反复手改 INI。
 - **Qbar 与窗口顶置**：`CapsLock+Q` 可使用内置 Qbar，也可绑定外部程序；窗口顶置增加可配置的边框提示和音效。
-- **防止息屏与睡眠**：托盘图标右键菜单提供「防止息屏与睡眠」开关和「唤醒方式」子菜单，`Caps+F10` 直接切换，息屏和休眠都会被阻止，适合演示、看文档、跑长任务时临时挂住。
+- **防止息屏与睡眠**：托盘图标右键菜单的「防止息屏与睡眠」子菜单里有「保持屏幕常亮」「防止系统睡眠」两个开关，`Caps+F10` 在三档间循环，适合演示、看文档、跑长任务时临时挂住。
 
 ## 鼠标手势怎么用
 
@@ -32,47 +32,25 @@
 
 ## 防止息屏与睡眠
 
-用于临时阻止电脑息屏和自动睡眠，思路与 [PowerToys Awake](https://learn.microsoft.com/windows/powertoys/awake) 一致，适合演示、看文档、跑长时间任务。
+临时阻止电脑息屏和自动睡眠，适合演示、看文档、跑长时间任务。用完关掉，电源控制就还给系统。
 
-三个入口：
+在托盘图标上点右键，展开「防止息屏与睡眠」：
 
-- 托盘图标右键 →「防止息屏与睡眠」，勾选状态表示当前是否生效；
-- 托盘图标右键 →「唤醒方式」，在「屏幕常亮 + 系统不睡眠」和「仅系统不睡眠」之间切换（这一层的勾只是标记当前选中的方式，不代表功能已开启）；
-- 键盘 `Caps+F10` 直接切换，每次切换都会在屏幕底部弹出提示，说明当前状态和所绑定的按键。
+- **保持屏幕常亮**：屏幕不关闭，电脑也不睡眠；
+- **防止系统睡眠**：电脑不睡眠，屏幕仍按电源计划关闭。
 
-「屏幕常亮 + 系统不睡眠」同时阻止系统睡眠和显示器关闭；「仅系统不睡眠」只阻止睡眠，屏幕仍按电源计划关闭。唤醒方式保存在 `CapsLock+settings.ini` 的 `[Global]` 段，字段为 `awakeMode`（`display` 或 `system`）；开关状态本身不写入配置，重新启动后默认关闭，避免忘记关掉后一直占用。
+两项可以单独勾选。勾上「保持屏幕常亮」会自动带上「防止系统睡眠」，因为屏幕亮着而电脑睡下去没有意义；反过来不成立，你可以只防睡眠、让屏幕照常关闭。
 
-实现上直接调用 Windows 的 `SetThreadExecutionState`，以 `ES_CONTINUOUS` 持续声明 `ES_SYSTEM_REQUIRED`（阻止睡眠）和 `ES_DISPLAY_REQUIRED`（阻止息屏）。这与 PowerToys Awake 使用的是同一个系统机制，本仓库没有引入 PowerToys 的代码；提示窗沿用鼠标手势提示的深色圆角样式。系统在从睡眠或休眠恢复后可能重置该状态，所以开启期间每 60 秒重新声明一次，脚本退出时再显式清除。
+也可以按 `Caps+F10` 循环切换，顺序是：全关 → 只防睡眠 → 屏幕常亮 → 全关。每次切换都会在屏幕底部弹出提示，告诉你当前状态和这个按键。
 
-`Caps+F10` 默认未占用，因此在两套键位方案里都指向这个功能。要换成别的按键，修改 `CapsLock+settings.ini` 的 `[Keys]`，例如 `caps_f9=keyFunc_toggleAwake`。
+关闭后不会残留设置，重启程序会沿用上次的状态。想换绑其他按键，改 `CapsLock+settings.ini` 里的 `[Keys]`，例如 `caps_f9=keyFunc_toggleAwake`。
 
-### 怎么确认它真的生效
-
-根目录的 `awake_counter.ahk` 是一个用来验证的计数窗口，每秒 +1。用 AutoHotkey v1 运行后让它一直开着：
-
-1. 先不开功能，等到超过电源计划里的“关闭显示器”时间——屏幕应该正常黑掉。
-2. 打开功能后再等同样长的时间——屏幕应保持点亮，数字持续增长。
-
-数字还在涨，说明系统没有息屏也没有睡眠；如果屏幕黑了，回来时数字会停在中断的位置。想调整等待时间，可在“控制面板 → 电源选项”或 `powercfg` 里改当前计划的关闭显示器和睡眠时间，验证完再改回去。
-
-## 运行与验证
+## 安装与运行
 
 1. 安装 AutoHotkey **v1.1**（不是 v2）。
 2. 直接运行根目录的 `CapsLock+.ahk`；脚本会按现有入口逻辑请求管理员权限，无需运行单独的 EXE。
-3. 在程序设置页按需开启或调整手势。紧急退出快捷键为 `Ctrl+Alt+Shift+F12`。
+3. 在设置页按需开启或调整手势。紧急退出快捷键为 `Ctrl+Alt+Shift+F12`。
 
-验证“防止息屏与睡眠”时，可直接运行根目录的 `awake_counter.ahk`（见上文说明）。它是一个每秒自增的计数窗口，屏幕一黑数字就停，比盯时间更直观。
+手势识别核心移植自 [Lexikos/Gestures.ahk](https://github.com/Lexikos/Gestures.ahk)，规则配置设计参考 [ayuanx/AutoHotKey_MouseGesture](https://github.com/ayuanx/AutoHotKey_MouseGesture)。本项目沿用仓库中的 [GPL-2.0 许可证](LICENSE)。
 
-手势回归测试：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tests/test_mouseGestureEngine.ps1
-```
-
-测试使用独立的模拟输入，不会向桌面发送鼠标事件。手势识别核心移植自 [Lexikos/Gestures.ahk](https://github.com/Lexikos/Gestures.ahk)，规则配置设计参考 [ayuanx/AutoHotKey_MouseGesture](https://github.com/ayuanx/AutoHotKey_MouseGesture)。本项目沿用仓库中的 [GPL-2.0 许可证](LICENSE)。
-
-## 发布 EXE
-
-将 `v` 开头的版本标签（例如 `v0.2`）推送到 GitHub，会触发 [发布工作流](.github/workflows/release.yml)。它使用固定版本的 AutoHotkey v1 和 Ahk2Exe 编译 64 位 `CapsLock+.exe`，通过回归测试后创建对应的 GitHub Release，并上传 EXE 与 SHA-256 校验文件。只修改或推送普通分支不会创建 Release。
-
-如果某个标签的自动构建失败，可在 GitHub Actions 中从 `master` 手动运行同一工作流，输入已有标签名（例如 `v0.2`）；它会重新编译该标签对应的源码，无需移动或重建标签。
+自己编译、跑测试和发版请见 [DEVELOPING.md](DEVELOPING.md)。
