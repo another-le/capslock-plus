@@ -111,6 +111,9 @@ winPinSoundEnabled=1
 ; Custom WAV file for pinning sounds. Leave empty to use the PowerToys default sounds
 winPinSoundFile=
 
+; Awake mode: display keeps both the screen and the PC awake (default); system only prevents sleep, the screen still follows the power plan
+awakeMode=display
+
 ;----------------------------------------------------------------
 ; ## Qbar searching command settings
 
@@ -510,7 +513,8 @@ caps_f8=keyFunc_getJSEvalString
 
 caps_f9=keyFunc_doNothing
 
-caps_f10=keyFunc_doNothing
+; Keep the screen awake / off, preventing the display and PC from sleeping (also in the tray menu)
+caps_f10=keyFunc_toggleAwake
 
 caps_f11=keyFunc_doNothing
 

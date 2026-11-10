@@ -161,7 +161,7 @@ keySchemeInit_capslox(){
     if(!keyset.caps_f9)
         keyset.caps_f9:="keyFunc_doNothing"
     if(!keyset.caps_f10)
-        keyset.caps_f10:="keyFunc_doNothing"
+        keyset.caps_f10:="keyFunc_toggleAwake"
     if(!keyset.caps_f11)
         keyset.caps_f11:="keyFunc_doNothing"
     if(!keyset.caps_f12)
@@ -441,7 +441,7 @@ keySchemeInit_capslockPlus(){
     if(!keyset.caps_f9)
         keyset.caps_f9:="keyFunc_doNothing"
     if(!keyset.caps_f10)
-        keyset.caps_f10:="keyFunc_doNothing"
+        keyset.caps_f10:="keyFunc_toggleAwake"
     if(!keyset.caps_f11)
         keyset.caps_f11:="keyFunc_doNothing"
     if(!keyset.caps_f12)

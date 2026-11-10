@@ -35,6 +35,7 @@ if(isLangChinese())
 ;------------  /language -----------
 
 gosub, settingsInit ;初始化设置
+awake_init()
 settingsGui_init()
 mouseGesture_init()
 

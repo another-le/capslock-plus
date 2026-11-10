@@ -857,6 +857,12 @@ keyFunc_winPin(){
     return
 }
 
+; 保持唤醒（防止息屏 / 休眠），默认绑定 Caps+F10
+keyFunc_toggleAwake(){
+    awake_toggle()
+    return
+}
+
 
 keyFunc_goCjkPage(){
     global

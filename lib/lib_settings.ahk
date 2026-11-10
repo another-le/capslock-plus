@@ -108,6 +108,8 @@ if(latestModifyTime!=settingsModifyTime)
                     SetTimer, globalSettings, -1
                 else if(key2="loadScript")
                     SetTimer, jsEval_init, -1
+                else if(key2="awakeMode")
+                    awake_refreshSettings()
             }
         }
     }

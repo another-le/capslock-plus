@@ -20,6 +20,7 @@ settingsGui_init(){
     ; 将设置放在标准项之前，因此自然位于 Exit 上方且不会破坏系统菜单。
     Menu, Tray, NoStandard
     Menu, Tray, Add, %settingsGuiTrayLabel%, settingsGuiOpenFromTray
+    awake_buildTrayMenu()
     Menu, Tray, Standard
     settingsGui_cleanupConfigDefaults()
 }
