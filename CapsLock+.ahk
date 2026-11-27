@@ -1,4 +1,4 @@
-#SingleInstance force
+﻿#SingleInstance force
 
 ; All legacy INI and asset paths are relative to the application directory.
 ; Shortcuts and elevated relaunches may otherwise start with another working directory.
@@ -159,7 +159,8 @@ try
 return
 #if
 
-#If CapsLock ;when capslock key press and hold
+; A hotkey can keep the CapsLock thread waiting after the physical key is released.
+#If CapsLock && GetKeyState("CapsLock", "P")
 
 LAlt::return
 
